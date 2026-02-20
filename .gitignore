@@ -1,8 +1,21 @@
+# Repository ignore policy.
+# Purpose: keep generated artifacts, local environments, and editor metadata out of VCS.
+# Last reviewed: 2026-02-20
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
-*.py[codz]
+*.py[cod]
 *$py.class
 
+# personal
+personal
+docs/000_governance/CLAUDE.md
+.claude
+logs/
+data/001_bronze/
+data/002_silver/
+data/003_gold/
+data/004_model/
 # C extensions
 *.so
 
@@ -205,3 +218,4 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+

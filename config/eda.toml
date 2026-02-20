@@ -1,0 +1,32 @@
+[visualization]
+figure_size = [14, 6]
+figure_size_wide = [14, 8]
+figure_size_compact = [14, 4]
+figure_size_grid = [16, 8]
+figure_size_correlation = [16, 12]
+seaborn_style = "whitegrid"
+
+[visualization.day_class_colors]
+full = "#2ca02c"
+half = "#1f77b4"
+none = "#ff7f0e"
+
+[analysis]
+zscore_threshold = 3.0
+histogram_bins = 50
+correlation_high_threshold = 0.95
+top_correlations_count = 20
+zero_run_threshold_seconds = 300
+overlay_resample_frequency = "5min"
+legend_max_labels = 3
+percentiles = [0.01, 0.05, 0.25, 0.5, 0.75, 0.95, 0.99]
+
+[analysis.physical_range]
+load_min_watts = 0.0
+load_max_watts = 100000.0
+
+[analysis.distribution_features]
+columns = ["avg_load", "workday", "day_of_week", "hour", "season", "time_of_day"]
+
+[resolution_selection]
+default_mode = "default"
