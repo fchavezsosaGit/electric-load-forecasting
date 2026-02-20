@@ -12,10 +12,6 @@ personal
 docs/000_governance/CLAUDE.md
 .claude
 logs/
-data/001_bronze/
-data/002_silver/
-data/003_gold/
-data/004_model/
 # C extensions
 *.so
 
