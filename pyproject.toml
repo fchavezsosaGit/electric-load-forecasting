@@ -1,0 +1,38 @@
+# Root Python tooling manifest.
+# Purpose: project metadata, dependency management, and tool configuration.
+# Runtime pipeline settings live in config/pipeline.toml and config/eda.toml.
+# Last reviewed: 2026-02-20
+
+[project]
+name = "electric-load-forecasting"
+version = "0.1.0"
+description = "Short-term electric load forecasting pipeline and modeling framework"
+requires-python = ">=3.11"
+dependencies = [
+    "numpy>=1.24,<3.0",
+    "pandas>=2.0,<3.0",
+    "scipy>=1.11,<2.0",
+    "matplotlib>=3.7,<4.0",
+    "seaborn>=0.12,<1.0",
+    "plotly>=5.15,<6.0",
+    "pyarrow>=14.0,<20.0",
+    "scikit-learn>=1.3,<2.0",
+    "statsmodels>=0.14,<1.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "jupyter>=1.0,<2.0",
+    "pytest>=7.0,<9.0",
+    "pytest-cov>=4.0,<7.0",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+
+[tool.coverage.run]
+source = ["scripts", "run_pipeline"]
+
+[tool.coverage.report]
+show_missing = true

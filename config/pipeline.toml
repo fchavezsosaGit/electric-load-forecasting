@@ -1,0 +1,64 @@
+[paths]
+raw_mat = "data/000_raw/P_data.mat"
+bronze_file = "data/001_bronze/power_load_1s.parquet"
+silver_dir = "data/002_silver"
+gold_dir = "data/003_gold"
+model_dir = "data/004_model"
+logs_dir = "logs"
+
+[raw_contract]
+seconds_per_day = 86400
+required_keys = ["P_data", "day_data", "day_class"]
+
+[resolutions]
+supported = ["1s", "5s", "10s", "30s", "1min", "5min", "10min", "15min"]
+defaults = ["1min", "5min", "10min", "15min"]
+
+[resolutions.aliases]
+"60s" = "1min"
+
+[resolutions.suffixes]
+"1s" = "1s"
+"5s" = "5s"
+"10s" = "10s"
+"30s" = "30s"
+"1min" = "1m"
+"5min" = "5m"
+"10min" = "10m"
+"15min" = "15m"
+
+[features]
+lag_periods = [1, 5, 15, 60, 1440]
+rolling_periods = [5, 15, 60, 240, 1440]
+slope_periods = [5, 15, 60]
+
+[day_class]
+mapping = { none = 0, half = 1, full = 2 }
+valid_classes = ["full", "half", "none"]
+
+[splits]
+train = [1, 25]
+validate = [26, 28]
+test = [29, 31]
+
+[target]
+column = "avg_load"
+
+[quality_thresholds]
+silver_nan_drop_warn_pct = 5.0
+
+[feature_sets.minimal]
+columns = ["workday", "hour", "lag_1"]
+
+[feature_sets.temporal]
+columns = [
+    "workday", "year", "quarter", "month", "day",
+    "day_of_week", "hour", "season", "time_of_day", "lag_1"
+]
+
+[feature_sets.curated]
+columns = [
+    "workday", "hour", "season", "time_of_day",
+    "lag_1", "lag_5", "lag_60", "lag_1440",
+    "rolling_mean_15", "rolling_std_60", "slope_15"
+]
