@@ -153,14 +153,30 @@ script produces identical parquet files. This is guaranteed by:
 
 The model datasets directly support the project hypotheses and MVMP:
 
-| Hypothesis | Resolution | Feature Sets Compared | Metric |
-|-----------|------------|----------------------|--------|
-| H1 (workday signal) | `5min` | `minimal` vs `temporal` | MAE |
-| H2 (lag value) | `5min` | `temporal` vs `curated` | RMSE |
-| H3 (resolution tradeoff) | `1min` vs `5min` | `minimal` | MAE |
+| Hypothesis | Resolution | Feature Sets Compared | Metric | MVP Status |
+|-----------|------------|----------------------|--------|------------|
+| H1 (workday signal) | `1min` | `minimal` vs temporal-minus-workday control | MAE | Evaluated |
+| H2 (lag value) | `1min` | `temporal` vs `curated` | RMSE | Evaluated |
+| H3 (resolution tradeoff) | `1min` vs `5min` | `minimal` | MAE | Deferred |
+| H4 (nonlinear behavior, exploratory) | `1min` | all feature sets | MAE and RMSE | Evaluated |
 
-MVMP scope: `5min` resolution, `minimal` feature set, Linear Regression, MAE as
-primary metric. See [mvmp.md](../../003_modeling/mvmp.md) for full definition.
+MVMP scope: `1min` resolution with a fixed model grid (Ridge + HGB), validation-driven
+hypothesis evaluation, and one-shot holdout test reporting. See
+[mvmp.md](../../003_modeling/mvmp.md) for full definition.
+
+## Holdout Selection Policy (Current Report IV Execution)
+
+To avoid selecting models that are only strong on small/easy subsets, holdout selection
+uses evaluation coverage guardrails in the modeling notebook:
+
+- Compute `eval_coverage = n_eval / n_eval_total` per validation row.
+- Select holdout candidate from models with `eval_coverage >= 0.95`.
+- If no model meets threshold, fallback to highest coverage then lowest MAE.
+- Persist both `raw_best_by_mae` and `selected_for_holdout` to
+  `outputs/step4_artifacts/run_manifest.json`.
+
+This policy is especially important for feature sets with long windows
+(`rolling_*_1440`), where Ridge can drop many rows due to NaN propagation.
 
 
 

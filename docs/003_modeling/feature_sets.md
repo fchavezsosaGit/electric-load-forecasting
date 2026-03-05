@@ -20,6 +20,10 @@ Related references:
 | `full` | C | 41 | Maximum information content benchmark |
 | `curated` | D | 11 | Balanced signal with reduced collinearity |
 
+Report IV MVP execution note:
+- The notebook currently evaluates these sets at `1min` resolution only.
+- Multi-resolution experiments are intentionally deferred.
+
 ## Set Definitions
 
 ### `minimal` (A)
@@ -43,8 +47,9 @@ Risks:
   is needed.
 
 Hypothesis connection:
-- H1 uses `minimal` as treatment to test the value of `workday`.
-- H3 uses `minimal` across resolutions to isolate the resolution effect.
+- H1 uses `minimal` as treatment against a control derived from `temporal` with
+  `workday` removed (`temporal_no_workday` in notebook logic).
+- H3 will use `minimal` across resolutions when multi-resolution runs are enabled.
 
 ### `temporal` (B)
 
@@ -64,7 +69,7 @@ Hypothesis connection:
 Rationale:
 - Adds full calendar structure while keeping feature count moderate (10 columns).
 - Tests whether temporal context beyond `hour` improves predictions over the minimal set.
-- Serves as the control condition for hypothesis H2 (lag value).
+- Serves as the base set for H1 control derivation by removing `workday`.
 
 Risks:
 - Calendar features (`year`, `quarter`, `month`) can be weak predictors on a 31-day
@@ -142,4 +147,7 @@ all supported resolutions (`1s` through `15min`) produced by the pipeline. Lag a
 rolling window sizes are in periods (not fixed time), so their real-world duration
 scales with resolution. For example, `lag_60` at `5min` resolution looks back 300
 minutes (5 hours), while at `1min` resolution it looks back only 60 minutes (1 hour).
+
+Current Report IV hypothesis execution uses only `1min` resolution, with H3
+explicitly deferred until multi-resolution runs are re-enabled.
 

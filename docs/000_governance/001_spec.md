@@ -132,7 +132,7 @@ here, the implementer should verify and update this table.
 | `plotly` >=5.15 | Interactive charts | Yes (pure Python + JS) | No issues expected |
 | `scikit-learn` >=1.3 | Mutual information | Yes (native since 1.1) | No issues expected |
 | `statsmodels` >=0.14 | STL, VIF, PACF, ADF | Yes (native since 0.14) | Verify wheel exists for exact version |
-| `pyarrow` >=14.0 | Parquet I/O | Yes (native since 10.0) | No issues expected |
+| `pyarrow` >=14.0 (non-ARM64) + `fastparquet` >=2025.12 | Parquet I/O | Yes (platform-dependent wheels) | Use `fastparquet` fallback where `pyarrow` wheel is unavailable |
 | `tomllib` | TOML parsing | Yes (stdlib since 3.11) | No external dependency |
 | `jupyter` >=1.0 | Notebook execution | Yes | No issues expected |
 | `pytest` >=7.0 | Testing | Yes (pure Python) | No issues expected |

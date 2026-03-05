@@ -674,7 +674,9 @@ Dependency manifest updates (`pyproject.toml`):
   - `matplotlib>=3.7`
   - `seaborn>=0.12`
   - `plotly>=5.15`
-- Add missing runtime dependency: `pyarrow>=14.0` (required for parquet read/write).
+- Add parquet runtime dependencies with platform-safe fallback:
+  - `pyarrow>=14.0` where wheels are available
+  - `fastparquet>=2025.12` as fallback parquet backend on platforms lacking `pyarrow` wheels
 - Add missing test dependencies: `pytest>=7.0`, `pytest-cov>=4.0`.
 - Add `jupyter>=1.0` for notebook execution.
 
@@ -840,25 +842,25 @@ Acceptance criteria:
 Rationale: Without a clear hypothesis, the team will build models without a measurable target. The MVMP (Minimum Viable Modeling Product) constrains the first modeling pass to the simplest version that answers a real question.
 
 Tasks:
-- Create `docs/003_modeling/hypothesis.md` with 2-3 testable hypotheses using the template from Lecture 3 Slide 14:
-  - Format: "EDA shows [observation]. We hypothesize that [approach] will [effect] as measured by [metric] achieving [target]."
-  - Example H1: "EDA shows workday type strongly separates load profiles. We hypothesize that including `workday` as a feature will reduce MAE by at least 10% compared to a temporal-only baseline."
-  - Example H2: "EDA shows strong autocorrelation in load. We hypothesize that lag features (1m, 5m, 60m, 1440m) will provide the largest marginal improvement to a linear regression baseline."
-  - Example H3: "EDA shows 5-minute resolution retains load dynamics while reducing noise. We hypothesize that 5-minute resolution will achieve comparable MAE to 1-minute with 5x fewer training rows."
+- Create `docs/003_modeling/hypothesis.md` with the Report IV hypothesis set:
+  - H1: workday signal effect (MAE target >=10%) at `1min`.
+  - H2: lag/rolling transition value (RMSE target >=8%) at `1min`.
+  - H3: resolution tradeoff (`1min` vs `5min`) documented as deferred for the MVP.
+  - H4: nonlinear behavior vs regularized linear baseline as exploratory analysis.
 - Create `docs/003_modeling/mvmp.md` defining the first modeling scope:
-  - Resolution: pick one to start (recommend 5-minute for balance of signal and dataset size).
-  - Feature set: pick one (recommend minimal or temporal).
-  - Model: Linear Regression as baseline (simplest, fastest, interpretable).
-  - Metric: MAE on the test set as primary, RMSE as secondary.
-  - Success threshold: define what "good enough" means for the first pass.
+  - Resolution anchor: `1min`.
+  - Feature-set anchor: `minimal` for control, with full fixed grid across all feature sets.
+  - Models: Ridge + HistGradientBoostingRegressor fixed configs.
+  - Metric protocol: use validation split for hypothesis evaluation; reserve test for one-shot final holdout only.
+  - Success criteria: reproducibility, protocol integrity, artifact completeness, and baseline transparency.
 - Map each hypothesis to which resolution, feature set, and model it requires.
 - Map research questions from Report I Section 4 to the hypotheses.
 
 Acceptance criteria:
-- `docs/003_modeling/hypothesis.md` has 2-3 hypotheses in the Slide 14 format.
+- `docs/003_modeling/hypothesis.md` defines H1-H3 with H4 exploratory support in the Slide 14 format.
 - Each hypothesis names a specific metric and a measurable target.
-- `docs/003_modeling/mvmp.md` specifies one resolution, one feature set, one model, and one primary metric.
-- The team can read MVMP and know exactly what to build first.
+- `docs/003_modeling/mvmp.md` specifies the `1min` MVP anchor, fixed model family, and validate/test protocol.
+- The team can read MVMP and know exactly what is executed now vs deferred.
 - Hypotheses are traceable to Report I research questions.
 
 ---

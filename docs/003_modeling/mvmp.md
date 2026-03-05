@@ -15,33 +15,29 @@ Related references:
 
 | Parameter | Value | Rationale |
 |-----------|-------|-----------|
-| Resolution | `5min` | Reduces dataset to 8,928 rows (5x smaller than `1min`) while preserving daily load shape |
-| Feature set | `minimal` | 3 predictors (`workday`, `hour`, `lag_1`) -- tests signal without feature overload |
-| Model | Linear Regression | Fast, interpretable, and ideal for validating the end-to-end modeling path |
+| Resolution | `1min` | Matches Report IV MVP execution and preserves short-horizon nowcasting behavior |
+| Feature set anchor | `minimal` | 3 predictors (`workday`, `hour`, `lag_1`) for a controlled starting point |
+| Model families | Ridge + HistGradientBoostingRegressor | Regularized linear baseline plus fixed nonlinear comparators |
 | Primary metric | MAE | Directly interpretable in watts; measures average prediction error |
 | Secondary metric | RMSE | Penalizes large errors; useful for detecting poor performance during load transitions |
 
 ## Why this scope
 
-- `5min` reduces dataset size by 5x vs `1min` while preserving daily structure. This
-  makes iteration faster during initial development without sacrificing the load dynamics
-  needed for meaningful evaluation.
-- `minimal` tests whether the pipeline can deliver useful signal with only three features.
-  If the minimal set already beats a naive baseline, the pipeline infrastructure is
-  validated and the team can iterate on features with confidence.
-- Linear Regression is fast, interpretable, and produces a clear baseline against which
-  all future models can be compared. It also avoids introducing hyperparameter tuning
-  complexity before the pipeline is proven.
-- `15min` is retained as a required operational resolution when interval billing applies.
-  MVMP remains at `5min` for first-pass model iteration speed.
+- The current Report IV decision is to lock MVP execution to `1min` so hypothesis
+  evidence is based on one consistent resolution.
+- `minimal` is still the anchor for controlled comparisons, but the executed notebook
+  evaluates all four feature sets (`minimal`, `temporal`, `curated`, `full`).
+- Ridge provides a deterministic regularized linear baseline; HGB adds nonlinear
+  behavior checks without changing data contracts.
+- Multi-resolution expansion (`5min`, `10min`) remains planned future work.
 
-## Dataset sizes (approximate)
+## Dataset sizes (approximate, `1min`)
 
-| Split | Days | Rows (5min) | Date Range |
+| Split | Days | Rows (1min) | Date Range |
 |-------|------|-------------|------------|
-| Train | 25 | ~7,200 | Nov 28 - Dec 22 |
-| Validate | 3 | ~864 | Dec 23 - Dec 25 |
-| Test | 3 | ~864 | Dec 26 - Dec 28 |
+| Train | 25 | ~36,000 | Nov 28 - Dec 22 |
+| Validate | 3 | ~4,320 | Dec 23 - Dec 25 |
+| Test | 3 | ~4,320 | Dec 26 - Dec 28 |
 
 Note: Exact row counts depend on gold-layer null filtering. December 25 (Christmas)
 falls in the validation split, which may affect representativeness for business-day
@@ -49,14 +45,16 @@ predictions. This is documented for awareness but not altered given the 31-day d
 
 ## Success threshold (first pass)
 
-The MVMP is successful if all three conditions are met:
+The MVMP is successful when all conditions below are met:
 
 1. **Reproducibility**: Running the pipeline and model training twice with the same
-   inputs produces identical metrics. No randomness, no data leakage, no manual steps.
-2. **Baseline improvement**: The Linear Regression model beats a naive persistence
-   baseline (predict next value = most recent observed value) on validation MAE.
-3. **Stability**: Metrics do not change across reruns, confirming deterministic behavior
-   from data ingestion through evaluation.
+   inputs produces consistent metrics and artifact files (`run_manifest.json`,
+   `metrics_overall.csv`).
+2. **Protocol integrity**: Hypotheses are evaluated on validation only, and holdout test
+   is executed once after model selection.
+3. **Baseline transparency**: Performance versus persistence/previous-day/avg-workday is
+   explicitly reported, regardless of whether a model beats persistence.
+4. **Artifact completeness**: `outputs/step4_artifacts/` contains required CSV/PNG files.
 
 ## Persistence baseline definition
 
@@ -72,11 +70,12 @@ signal from the feature set.
 
 ## Hypothesis mapping
 
-| Hypothesis | Resolution | Feature sets compared | Model | Primary metric |
-|-----------|------------|----------------------|-------|----------------|
-| H1 (workday signal) | 5min | minimal vs temporal | Linear Regression | MAE |
-| H2 (lag value) | 5min | temporal vs curated | Linear Regression | RMSE |
-| H3 (resolution tradeoff) | 1min vs 5min | minimal | Linear Regression | MAE |
+| Hypothesis | Resolution | Feature sets compared | Model family | Primary metric |
+|-----------|------------|----------------------|--------------|----------------|
+| H1 (workday signal) | `1min` | minimal vs temporal-minus-workday control | Ridge (primary), HGB (cross-check) | MAE |
+| H2 (lag/transition value) | `1min` | temporal vs curated | Ridge and HGB | RMSE |
+| H3 (resolution tradeoff) | `1min` vs `5min` | minimal | Ridge/HGB parity design | MAE |
+| H4 (exploratory nonlinear behavior) | `1min` | all feature sets | Ridge vs HGB | MAE and RMSE |
 
 See [hypothesis.md](hypothesis.md) for full hypothesis definitions and experimental
 designs.
@@ -84,9 +83,8 @@ designs.
 ## What comes after MVMP
 
 Once the MVMP criteria are met, the team can proceed to:
-- Testing additional feature sets (`temporal`, `curated`, `full`) against the baseline.
-- Evaluating hypothesis H1, H2, and H3 as defined in the hypothesis document.
-- Introducing more complex models (tree-based, regularized linear) if the feature set
-  experiments warrant it.
-- Expanding to additional resolutions (`1min`, `15min`) for operational evaluation.
+- Re-enable multi-resolution runs to evaluate H3 directly.
+- Add recursive rollout evaluation for day-ahead pathways.
+- Expand beyond fixed model grids into tuned model selection.
+- Add additional data windows and operational stress slices.
 

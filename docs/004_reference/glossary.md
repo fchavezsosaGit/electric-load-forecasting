@@ -146,8 +146,13 @@ Related references:
   Current split: train (days 1-25), validate (days 26-28), test (days 29-31).
 - MVMP (Minimum Viable Modeling Product): The first constrained modeling scope, designed
   to verify the end-to-end modeling path before scaling to more complex approaches.
-  Current MVMP: `5min` resolution, `minimal` feature set, Linear Regression, MAE as
-  primary metric.
+  Current MVMP: `1min` resolution anchor with `minimal` feature set initialization,
+  evaluated within a fixed Ridge + HistGradientBoostingRegressor experiment grid.
+- Ridge regression: Linear regression with L2 regularization (`alpha`) used as the
+  regularized linear baseline in Report IV modeling.
+- HistGradientBoostingRegressor (HGB): Tree-based gradient boosting model that supports
+  nonlinear structure and native handling of feature NaN values; used as a nonlinear
+  comparator against Ridge.
 - MAE (Mean Absolute Error): The average of the absolute differences between predicted
   and actual values. Primary evaluation metric. Lower is better.
 - RMSE (Root Mean Squared Error): The square root of the average of squared differences
@@ -158,6 +163,16 @@ Related references:
 - Hypothesis: A testable statement connecting an EDA observation to a modeling approach,
   with a specific metric and improvement target. Format documented in
   [hypothesis.md](../003_modeling/hypothesis.md).
+- Evaluation coverage (`eval_coverage`): The fraction of target-available evaluation
+  rows that were actually scored for a given experiment (`n_eval / n_eval_total`).
+  Lower coverage usually indicates feature-NaN row drop (for example, Ridge on
+  long-window rolling features).
+- Coverage guard selection policy: Holdout-model selection rule that restricts candidate
+  validation rows to experiments meeting a minimum evaluation coverage threshold
+  (`MIN_VALIDATE_COVERAGE`, currently 0.95). Prevents low-coverage "easy subset" wins.
+- Raw-best vs selected-best: Two recorded holdout-selection views in
+  `run_manifest.json`: (1) raw-best by validation MAE regardless of coverage, and
+  (2) selected-best after coverage guard policy.
 
 ## Data Quality
 

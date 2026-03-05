@@ -1,7 +1,9 @@
 {
     // Root static-analysis manifest for pyright.
     // Purpose: define analysis scope and resolve imports from scripts/.
-    // Last reviewed: 2026-02-20
+    // Last reviewed: 2026-03-04
+    "venvPath": ".",
+    "venv": ".venv",
     "include": [
         "run_pipeline.py",
         "scripts",

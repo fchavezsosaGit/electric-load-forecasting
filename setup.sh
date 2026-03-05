@@ -2,8 +2,8 @@
 set -euo pipefail
 
 # Purpose: bootstrap a local Python environment for this repository.
-# Source of truth for dependencies: pyproject.toml (`.[dev]` extras).
-# Last reviewed: 2026-02-20
+# Source of truth for dependencies: pyproject.toml (`project.dependencies` + `project.optional-dependencies.dev`).
+# Last reviewed: 2026-03-04
 #
 # Bootstrap a local development environment for this repository.
 # Usage:
@@ -27,7 +27,8 @@ fi
 
 source "$VENV_DIR/bin/activate"
 python -m pip install --upgrade pip
-python -m pip install -e ".[dev]"
+python -c "import pathlib, subprocess, sys, tomllib; cfg = tomllib.loads(pathlib.Path('pyproject.toml').read_text(encoding='utf-8')); project = cfg.get('project', {}); deps = list(project.get('dependencies', [])); deps.extend(project.get('optional-dependencies', {}).get('dev', [])); assert deps, 'No dependencies declared in pyproject.toml'; subprocess.check_call([sys.executable, '-m', 'pip', 'install', *deps])"
+python -c "import importlib.util; modules=['numpy','pandas','matplotlib','seaborn','sklearn','statsmodels','jupyter','fastparquet']; missing=[m for m in modules if importlib.util.find_spec(m) is None]; assert not missing, f'Missing dependencies after install: {missing}'; assert importlib.util.find_spec('pyarrow') or importlib.util.find_spec('fastparquet'), 'Missing parquet backend (pyarrow or fastparquet)'"
 
 echo "Setup complete."
 echo "Activate with: source $VENV_DIR/bin/activate"

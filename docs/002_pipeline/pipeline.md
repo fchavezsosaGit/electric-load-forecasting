@@ -8,6 +8,8 @@ Related references:
 - Notebook configurability specification: [001_spec.md](../000_governance/001_spec.md)
 - Architecture overview: [architecture.md](../001_architecture/000_overview/architecture.md)
 - Feature set definitions: [feature_sets.md](../003_modeling/feature_sets.md)
+- Report IV run summary: [report_iv_run_summary.md](../003_modeling/report_iv_run_summary.md)
+- Report IV success scorecard: [report_iv_success_scorecard.md](../003_modeling/report_iv_success_scorecard.md)
 - Glossary: [glossary.md](../004_reference/glossary.md)
 
 ## Layers
@@ -59,7 +61,7 @@ Validation overrides:
 - `ELF_NB_AUTO_OUTLIER`
 - `ELF_NB_AUTO_ACF_DEPTH`
 
-`scripts/validate_notebooks.py` executes notebooks with default settings and runs a silver
+`scripts/validate_notebooks.py` executes core notebooks (`000`-`003`) with default settings and runs a silver
 validation matrix covering `default`, `all`, and `custom` resolution modes plus both
 automatic and fixed-parameter behaviors.
 
@@ -192,11 +194,16 @@ Validation behavior notes:
 - Notebook execution uses a Python-managed nbconvert runner in
   `scripts/validate_notebooks.py` so Windows runs apply selector event-loop policy
   automatically and avoid prior `zmq` runtime warnings.
+- Default smoke scope includes `000_raw_eda.ipynb`, `001_bronze_eda.ipynb`,
+  `002_silver_eda.ipynb`, and `003_modeling.ipynb`.
 - Silver notebook validation includes baseline plus three profile runs:
   `default`, `all`, and `custom`.
 
-Latest verification snapshot (2026-02-20):
-- `python run_pipeline.py --stage all` -> success
-- `python scripts/validate_notebooks.py` -> success (no warning output)
+Latest verification snapshot (2026-03-04):
+- `python run_pipeline.py --stage all` -> success (bronze/silver/gold rebuilt for all configured resolutions)
+- `python scripts/validate_notebooks.py` -> success (default smoke scope: `000_raw_eda.ipynb` through `003_modeling.ipynb` + silver profile matrix)
+- `pytest -q tests/notebooks/test_validate_notebooks.py` -> `4 passed`
+
+Latest full-suite reference snapshot (2026-02-20):
 - `pytest -q` -> `98 passed`
 - `pyright run_pipeline.py scripts tests` -> `0 errors, 0 warnings`

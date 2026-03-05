@@ -1,7 +1,7 @@
 # Hypotheses
 
-This document defines testable hypotheses that connect EDA observations to modeling
-experiments. Each hypothesis follows the structured format from DSE 260 Lecture 3:
+This document defines Report IV hypotheses that connect EDA findings to the executed
+modeling notebook (`notebooks/003_modeling.ipynb`).
 
 Format:
 EDA shows `[observation]`. We hypothesize that `[approach]` will `[effect]` as measured
@@ -15,93 +15,99 @@ Related references:
 
 ## Summary Table
 
-| ID | Name | Metric | Target | Resolution | Feature Sets |
-|----|------|--------|--------|------------|-------------|
-| H1 | Workday signal | MAE | >=10% improvement | 5min | minimal vs temporal |
-| H2 | Lag value | RMSE | >=8% improvement | 5min | temporal vs curated |
-| H3 | Resolution tradeoff | MAE | <=5% degradation | 1min vs 5min | minimal |
+| ID | Name | Metric | Target | Resolution | Status |
+|----|------|--------|--------|------------|--------|
+| H1 | Workday signal | MAE | >=10% improvement | `1min` | Evaluated |
+| H2 | Lag/rolling value | RMSE | >=8% improvement | `1min` | Evaluated |
+| H3 | Resolution tradeoff | MAE | <=5% degradation (`5min` vs `1min`) | multi-resolution | Deferred |
+| H4 | Nonlinear behavior vs regularized linear baseline | MAE and RMSE | Exploratory | `1min` | Evaluated |
 
 ---
 
 ## H1: Workday signal
 
 Observation:
-EDA shows clear separation of daily load profiles across `day_class` (`full`, `half`,
-`none`). Full working days exhibit higher daytime peaks and steeper morning ramps
-compared to non-working days. Half days fall between the two. This separation is
-visible in both the raw overlay plots (`notebooks/000_raw_eda.ipynb`) and the silver
-workday profile analysis (`notebooks/002_silver_eda.ipynb`).
+EDA shows clear load-profile separation by business-day type (`full`, `half`, `none`).
 
 Hypothesis:
-We hypothesize that including `workday` in the feature set will reduce validation MAE
-by at least **10%** relative to a temporal-only baseline at the same resolution.
+We hypothesize that workday-aware signal reduces validation MAE by at least **10%**
+relative to a temporal control without `workday`.
 
 Experimental design:
-- Model: Linear Regression
-- Resolution: `5min`
-- Control: `temporal` feature set (calendar features + `lag_1`, without `workday`)
-- Treatment: `minimal` feature set (`workday` + `hour` + `lag_1`)
-- Evaluation: Compare MAE on the validation split (days 26-28)
-- Note: The `minimal` set has fewer features than `temporal`, so an improvement would
-  indicate that `workday` provides stronger signal than the additional calendar columns.
+- Resolution: `1min`
+- Model family for primary readout: Ridge (`alpha` in `{0.1, 1.0, 10.0}`)
+- Control: `temporal` feature set with `workday` removed in-notebook
+  (`temporal_no_workday`)
+- Treatment: `minimal` (`workday`, `hour`, `lag_1`)
+- Evaluation split: validation (days 26-28)
 
 Metric and target:
 - Primary metric: MAE
 - Target: >=10% MAE improvement
 
-## H2: Short and medium lag value
+## H2: Lag and transition context
 
 Observation:
-EDA shows strong short-term autocorrelation in `avg_load` at 1-minute resolution
-(`notebooks/002_silver_eda.ipynb`, ACF plot). The autocorrelation remains significant
-through at least 240 lags (4 hours), and a daily cycle is visible at lag 1440.
-This suggests that recent and daily-cycle load values carry predictive information
-beyond what calendar features alone provide.
+EDA shows strong autocorrelation and transition behavior in `avg_load`, including
+multi-horizon memory effects.
 
 Hypothesis:
-We hypothesize that adding lag features (`lag_1`, `lag_5`, `lag_60`, `lag_1440`) to
-linear regression will reduce validation RMSE by at least **8%** vs a model with only
-temporal and business features.
+We hypothesize that lag/rolling enriched features reduce large transition errors and
+improve validation RMSE by at least **8%** compared with temporal-only context.
 
 Experimental design:
-- Model: Linear Regression
-- Resolution: `5min`
-- Control: `temporal` feature set (calendar + business features + `lag_1`)
-- Treatment: `curated` feature set (adds `lag_5`, `lag_60`, `lag_1440`, rolling and
-  slope features)
-- Evaluation: Compare RMSE on the validation split (days 26-28)
-- Note: RMSE is chosen as the primary metric here because lag features are expected
-  to reduce large errors during load transitions, and RMSE penalizes large errors
-  more than MAE does.
+- Resolution: `1min`
+- Primary comparison: `temporal` vs `curated`
+- Models: Ridge and HistGradientBoostingRegressor cross-checks
+- Evaluation split: validation (days 26-28)
+- Note: RMSE is primary for H2 because it emphasizes larger misses.
+- Note: Ridge drops feature-NaN rows during fit, so `curated`/`full` can have fewer
+  effective training rows than `minimal`/`temporal`; HGB is included as a cross-check
+  because it can train with feature NaNs without that row-drop behavior.
 
 Metric and target:
 - Primary metric: RMSE
 - Target: >=8% RMSE improvement
 
-## H3: Resolution tradeoff
+## H3: Resolution tradeoff (deferred)
 
 Observation:
-EDA shows that 5-minute aggregation reduces high-frequency noise while preserving the
-overall daily load shape (`notebooks/002_silver_eda.ipynb`, multi-resolution hourly
-profile comparison). The 5-minute dataset has 5x fewer rows (8,928 vs 44,640) than
-the 1-minute dataset, which directly reduces training time and memory usage.
+Coarser resolutions can reduce noise and training cost, but may lose short-horizon
+fidelity.
 
 Hypothesis:
-We hypothesize that a 5-minute model will achieve MAE within **5%** of the equivalent
-1-minute model MAE, while training on significantly fewer rows.
+We hypothesize that a `5min` model can achieve MAE within **5%** of an equivalent
+`1min` model while using fewer training rows.
+
+Status:
+- **Deferred for Report IV MVP**.
+- Current notebook executes only `1min` resolution by design.
+- H3 will be evaluated when multi-resolution runs (`1min`, `5min`) are re-enabled.
+
+Planned comparison design (future run):
+- Same feature set (`minimal`) and same model family across resolutions.
+- One-step-ahead evaluation at each native resolution.
+- No interpolation/alignment to a shared grid in the MVP path.
+
+## H4: Nonlinear model behavior (exploratory)
+
+Observation:
+Feature interactions and regime nonlinearities may not be captured by purely linear
+models.
+
+Hypothesis (exploratory):
+We expect nonlinear learners to show selective gains on some feature sets/hours, but
+not necessarily a global MAE win over regularized linear baselines.
 
 Experimental design:
-- Model: Linear Regression
-- Feature set: `minimal` (held constant to isolate the resolution effect)
-- Control: `1min` resolution (44,640 rows before gold filtering)
-- Treatment: `5min` resolution (8,928 rows before gold filtering)
-- Evaluation: Compare MAE on the test split (days 29-31) at each resolution.
-  For fair comparison, both predictions are evaluated against the same ground-truth
-  load values, interpolated or aligned to a common resolution if needed.
-- Note: If the 5-minute model meets the target, it validates the MVMP choice of `5min`
-  as the default modeling resolution.
+- Resolution: `1min`
+- Models:
+  - Ridge: light/medium/strong regularization
+  - HistGradientBoostingRegressor: conservative/balanced/aggressive
+- Evaluation split: validation
+- Additional holdout check: one-shot test after selection
 
-Metric and target:
-- Primary metric: MAE
-- Target: 5-minute MAE no worse than +5% vs 1-minute
+Metric framing:
+- Track both MAE and RMSE.
+- No hard pass/fail threshold for H4; interpret as comparative behavior analysis.
 

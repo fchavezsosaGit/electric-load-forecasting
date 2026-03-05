@@ -107,23 +107,33 @@ Four canonical feature sets are defined for structured experimentation:
 | `curated` | 11 (selected lags, rolling stats, slope) | Balanced signal with reduced collinearity |
 | `full` | 41 (all non-metadata columns) | Maximum information content benchmark |
 
-Three testable hypotheses connect EDA observations to modeling experiments:
+Report IV modeling is currently executed as a **1-minute MVP** with fixed,
+reproducible experiment design:
 
-| ID | Hypothesis | Metric | Target |
-|----|-----------|--------|--------|
-| H1 | Workday classification provides stronger signal than calendar features alone | MAE | >=10% improvement |
-| H2 | Multi-horizon lag features reduce large prediction errors during load transitions | RMSE | >=8% improvement |
-| H3 | 5-minute resolution achieves comparable accuracy to 1-minute with 5x fewer rows | MAE | <=5% degradation |
+- 24-grid comparison: 4 feature sets x 6 model configurations
+- Baselines: persistence, previous-day, avg-workday
+- Model families: Ridge (`alpha` in `{0.1, 1.0, 10.0}`) and
+  HistGradientBoostingRegressor (3 fixed configs, `random_state=42`)
+- Primary hypothesis evaluation split: validation
+- Final holdout policy: one-shot test evaluation only after model selection
 
-The Minimum Viable Modeling Product (MVMP) constrains the first modeling pass
-to `5min` resolution, the `minimal` feature set, and Linear Regression, with
-MAE as the primary metric. This verifies the end-to-end modeling path before
-the team invests in more complex approaches.
+Current hypothesis posture:
+
+| ID | Hypothesis | Metric | Target | MVP Status |
+|----|-----------|--------|--------|------------|
+| H1 | Workday signal adds measurable value beyond calendar structure | MAE | >=10% improvement | Evaluated at `1min` |
+| H2 | Lag/rolling context reduces large transition errors | RMSE | >=8% improvement | Evaluated at `1min` |
+| H3 | Resolution tradeoff (`1min` vs `5min`) | MAE | <=5% degradation | Deferred (multi-resolution phase) |
+| H4 | Nonlinear model behavior vs regularized linear baseline | MAE/RMSE | Exploratory | Evaluated at `1min` |
+
+The current MVMP anchor is `1min` + `minimal` for initialization, with all
+experiments executed in online single-step forecasting mode.
 
 For full definitions, see:
 - [Feature Sets](docs/003_modeling/feature_sets.md)
 - [Hypotheses](docs/003_modeling/hypothesis.md)
 - [MVMP Scope](docs/003_modeling/mvmp.md)
+- [Report IV Run Summary](docs/003_modeling/report_iv_run_summary.md)
 
 ## Resolution Support
 
@@ -241,6 +251,32 @@ Optional logging overrides:
 - `ELF_PIPELINE_LOG_FILE=<path>` writes pipeline logs to a custom file.
 - `ELF_PIPELINE_LOG_FILE=off` disables file logging (console logging remains enabled).
 
+## Report IV Modeling (MVP)
+
+Run the complete modeling chain used for Report IV artifacts:
+
+```bash
+python run_pipeline.py --stage all
+python scripts/003_create_model_datasets.py
+python scripts/validate_notebooks.py --notebook notebooks/003_modeling.ipynb
+```
+
+Modeling outputs are written to:
+
+```text
+outputs/step4_artifacts/
+```
+
+Expected artifact files:
+- `metrics_overall.csv` (validation + one-shot holdout test metrics)
+- `metrics_by_day_class.csv`
+- `metrics_by_hour.csv`
+- `run_manifest.json`
+- `fig_actual_vs_predicted.png`
+- `fig_error_by_hour.png`
+- `fig_model_comparison.png`
+- `fig_day_ahead.png`
+
 ## Tooling Files
 
 - `pyproject.toml` is intentionally at repository root because Python packaging and tool
@@ -264,16 +300,19 @@ Run with coverage reporting:
 pytest --cov=scripts --cov=run_pipeline --cov-report=term
 ```
 
-Run notebook smoke validation (executes all EDA notebooks end-to-end, including
+Run notebook smoke validation (executes all core notebooks end-to-end, including
 silver resolution/profile matrix checks):
 
 ```bash
 python scripts/validate_notebooks.py
 ```
 
-Latest verification snapshot (2026-02-20):
-- `python run_pipeline.py --stage all` -> success
-- `python scripts/validate_notebooks.py` -> success (no warning output)
+Latest verification snapshot (2026-03-04):
+- `python run_pipeline.py --stage all` -> success (bronze/silver/gold rebuilt for all configured resolutions)
+- `python scripts/validate_notebooks.py` -> success (default smoke scope: `000_raw_eda.ipynb` through `003_modeling.ipynb` + silver profile matrix)
+- `pytest -q tests/notebooks/test_validate_notebooks.py` -> `4 passed`
+
+Latest full-suite reference snapshot (2026-02-20):
 - `pytest -q` -> `98 passed`
 - `pyright run_pipeline.py scripts tests` -> `0 errors, 0 warnings`
 
@@ -294,6 +333,8 @@ Latest verification snapshot (2026-02-20):
 | Feature Sets | Canonical feature set definitions with rationale, risks, and hypothesis connections | [feature_sets.md](docs/003_modeling/feature_sets.md) |
 | Hypotheses | Testable hypotheses connecting EDA observations to modeling experiments | [hypothesis.md](docs/003_modeling/hypothesis.md) |
 | MVMP Scope | First-pass modeling target with success criteria and persistence baseline | [mvmp.md](docs/003_modeling/mvmp.md) |
+| Report IV Run Summary | Measured outcomes from latest executed 1min MVP run and hypothesis snapshot | [report_iv_run_summary.md](docs/003_modeling/report_iv_run_summary.md) |
+| Report IV Success Scorecard | Stage-by-stage success readout against `personal/success.md` criteria | [report_iv_success_scorecard.md](docs/003_modeling/report_iv_success_scorecard.md) |
 | Glossary | Shared terminology for architecture, features, modeling, and data quality concepts | [glossary.md](docs/004_reference/glossary.md) |
 | Changelog Index | Index pointing to spec-specific implementation changelogs | [changelog.md](changelog.md) |
 
@@ -336,7 +377,8 @@ electric-load-forecasting/
 |   |-- 003_modeling/
 |   |   |-- feature_sets.md               Feature set definitions
 |   |   |-- hypothesis.md                 Testable hypotheses
-|   |   `-- mvmp.md                       Minimum Viable Modeling Product scope
+|   |   |-- mvmp.md                       Minimum Viable Modeling Product scope
+|   |   `-- report_iv_run_summary.md      Latest Report IV run outcomes and interpretation
 |   |-- 004_reference/
 |   |   `-- glossary.md                   Shared terminology
 |   `-- change logs/
@@ -345,7 +387,10 @@ electric-load-forecasting/
 |-- notebooks/
 |   |-- 000_raw_eda.ipynb                  Raw data exploratory analysis
 |   |-- 001_bronze_eda.ipynb               Bronze data exploratory analysis
-|   `-- 002_silver_eda.ipynb               Silver data exploratory analysis
+|   |-- 002_silver_eda.ipynb               Silver data exploratory analysis
+|   `-- 003_modeling.ipynb                 Report IV modeling experiments and artifact export
+|-- outputs/
+|   `-- step4_artifacts/                   Modeling metrics, figures, and run manifest
 |-- scripts/
 |   |-- config.py                         Centralized paths, schemas, feature config
 |   |-- utils.py                          Shared feature engineering utilities

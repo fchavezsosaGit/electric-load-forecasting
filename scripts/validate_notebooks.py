@@ -1,4 +1,4 @@
-"""Execute EDA notebooks end-to-end as a smoke validation step.
+"""Execute project notebooks end-to-end as a smoke validation step.
 
 For the silver notebook, run additional validation profiles covering
 all resolution modes and mixed AUTO-flag settings.
@@ -20,6 +20,7 @@ DEFAULT_NOTEBOOKS = [
     NOTEBOOK_DIR / "000_raw_eda.ipynb",
     NOTEBOOK_DIR / "001_bronze_eda.ipynb",
     NOTEBOOK_DIR / "002_silver_eda.ipynb",
+    NOTEBOOK_DIR / "003_modeling.ipynb",
 ]
 logger = logging.getLogger(__name__)
 SILVER_NOTEBOOK_NAME = "002_silver_eda.ipynb"

@@ -7,10 +7,14 @@ __pycache__/
 *.py[cod]
 *$py.class
 
-# personal
-personal
-docs/000_governance/CLAUDE.md
-.claude
+# private/project-local planning and agent guidance
+personal/
+**/CLAUDE.md
+**/claude.md
+**/CLAUDE.mds
+**/claude.mds
+.claude/
+**/.claude/
 logs/
 # C extensions
 *.so

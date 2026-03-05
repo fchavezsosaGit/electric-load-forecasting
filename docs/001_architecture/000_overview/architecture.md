@@ -97,6 +97,46 @@ with its upstream and downstream neighbors.
      +--------------+--------------+--------------+------+
 ```
 
+## Report IV Modeling and Evaluation Flow (1min MVP)
+
+The repository now includes an explicit modeling/evaluation path layered on top of the
+medallion pipeline. This path keeps validation model selection and holdout testing
+separate, with a coverage guard to prevent low-coverage rows from biasing holdout
+selection.
+
+```text
+gold/model datasets (1min)
+        |
+        v
+notebooks/003_modeling.ipynb
+  - baselines: persistence / previous_day / avg_workday
+  - 24-grid: 4 feature sets x (ridge x3, hgb x3)
+  - H1 control + day-ahead extension
+        |
+        v
+validation metrics (outputs/step4_artifacts/metrics_overall.csv)
+        |
+        +--> raw-best by MAE (for audit visibility)
+        |
+        +--> coverage guard (MIN_VALIDATE_COVERAGE=0.95)
+                 |
+                 v
+            selected holdout model
+                 |
+                 v
+            one-shot test evaluation
+                 |
+                 v
+run_manifest.json + report figures/CSVs
+```
+
+Key artifacts:
+- `outputs/step4_artifacts/metrics_overall.csv`
+- `outputs/step4_artifacts/metrics_by_day_class.csv`
+- `outputs/step4_artifacts/metrics_by_hour.csv`
+- `outputs/step4_artifacts/run_manifest.json`
+- `outputs/step4_artifacts/fig_*.png`
+
 ## Resolution Policy
 
 The pipeline supports multiple temporal resolutions from second-level to 15-minute
