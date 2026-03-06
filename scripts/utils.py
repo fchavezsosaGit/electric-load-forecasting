@@ -1,4 +1,4 @@
-"""Shared utility helpers for feature engineering and EDA validation."""
+"""Shared utility helpers for feature engineering, EDA validation, and logging."""
 
 from __future__ import annotations
 
@@ -11,6 +11,31 @@ import numpy as np
 import pandas as pd
 
 logger = logging.getLogger(__name__)
+
+
+def emit_quality_gate(
+    gate_name: str,
+    passed: bool,
+    *,
+    details: dict[str, object] | None = None,
+    logger_instance: logging.Logger | None = None,
+    failure_level: int = logging.WARNING,
+) -> None:
+    """Emit a standardized PASS/FAIL gate summary to logs.
+
+    This keeps stage-end health messages machine-readable and consistent across
+    pipeline scripts while leaving hard structural failures to the calling code.
+    """
+    target_logger = logger_instance or logger
+    status = "PASS" if passed else "FAIL"
+    message = f"{gate_name}: {status}"
+    if details:
+        rendered = " | ".join(f"{key}={value}" for key, value in details.items())
+        message = f"{message} | {rendered}"
+    if passed:
+        target_logger.info(message)
+    else:
+        target_logger.log(failure_level, message)
 
 
 def month_to_season(month: int) -> int:

@@ -173,7 +173,7 @@ uses evaluation coverage guardrails in the modeling notebook:
 - Select holdout candidate from models with `eval_coverage >= 0.95`.
 - If no model meets threshold, fallback to highest coverage then lowest MAE.
 - Persist both `raw_best_by_mae` and `selected_for_holdout` to
-  `outputs/step4_artifacts/run_manifest.json`.
+  `outputs/004_modeling/run_manifest.json`.
 
 This policy is especially important for feature sets with long windows
 (`rolling_*_1440`), where Ridge can drop many rows due to NaN propagation.

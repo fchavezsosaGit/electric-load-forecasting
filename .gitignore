@@ -1,6 +1,6 @@
 # Repository ignore policy.
 # Purpose: keep generated artifacts, local environments, and editor metadata out of VCS.
-# Last reviewed: 2026-02-20
+# Last reviewed: 2026-03-06
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
@@ -15,7 +15,19 @@ personal/
 **/claude.mds
 .claude/
 **/.claude/
+.vscode/
+.DS_Store
+Thumbs.db
 logs/
+data/001_bronze/
+data/002_silver/
+data/003_gold/
+data/004_model/
+outputs/004_modeling/
+outputs/005_performance/
+# legacy generated output folders retained during artifact-path migration
+outputs/step4_artifacts/
+outputs/step5_artifacts/
 # C extensions
 *.so
 

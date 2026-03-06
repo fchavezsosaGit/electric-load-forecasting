@@ -30,11 +30,13 @@ from config import (
     RESOLUTION_ALIASES,
     RESOLUTION_TO_SUFFIX,
     SCHEMAS,
+    SILVER_NAN_DROP_FAIL_PCT,
     SILVER_NAN_DROP_WARN_PCT,
     SUPPORTED_RESOLUTIONS,
     VALID_DAY_CLASSES,
 )
 from utils import (
+    emit_quality_gate,
     hour_to_time_of_day,
     month_to_season,
     rolling_slope_series,
@@ -328,6 +330,27 @@ def bronze_to_silver(
             resolution,
             silver["timestamp"].min(),
             silver["timestamp"].max(),
+        )
+        dropped_pct = (
+            float(bronze["load"].isna().mean() * 100.0)
+            if not bronze.empty
+            else 0.0
+        )
+        required_null_total = int(
+            silver[cast(list[str], SCHEMAS["silver"]["required_not_null"])].isna().sum().sum()
+        )
+        emit_quality_gate(
+            "SILVER QUALITY GATE",
+            dropped_pct <= SILVER_NAN_DROP_FAIL_PCT and required_null_total == 0,
+            details={
+                "resolution": resolution,
+                "rows": silver.shape[0],
+                "required_nulls": required_null_total,
+                "nan_drop_pct": f"{dropped_pct:.2f}",
+                "warn_threshold_pct": f"{SILVER_NAN_DROP_WARN_PCT:.2f}",
+                "fail_threshold_pct": f"{SILVER_NAN_DROP_FAIL_PCT:.2f}",
+            },
+            logger_instance=logger,
         )
         outputs.append(output_path)
 

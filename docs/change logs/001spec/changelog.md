@@ -3,6 +3,26 @@
 Source spec:
 - `docs/000_governance/001_spec.md`
 
+## 2026-03-06
+
+### Notebook Validation Output Hygiene
+
+What changed:
+- Updated `scripts/validate_notebooks.py` to clear transient notebook outputs after
+  successful execution by default.
+- Added `--keep-output` for cases where retained cell output is intentional.
+- Added tests covering:
+  - output cleanup behavior
+  - CLI propagation of `--keep-output`
+  - continued default scope of `000_raw_eda.ipynb` through `003_modeling.ipynb`
+- Updated README and pipeline operations docs to document the cleaned-output behavior.
+
+Why this was needed:
+- Tracked notebooks were retaining machine-specific warning paths and other local
+  runtime noise after validation runs.
+- The validator now preserves notebook source and execution counts while leaving
+  the repository clean and portable after smoke validation.
+
 ## 2026-02-20
 
 ### Verification Refresh

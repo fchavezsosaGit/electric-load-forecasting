@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 
 import numpy as np
@@ -174,3 +175,17 @@ def test_raw_to_bronze_all_nan_day_logs_warning(raw_module, synthetic_raw_dict, 
 
     raw_module.raw_to_bronze(raw_path=input_path, output_path=output_path)
     assert "all-NaN load values" in caplog.text
+
+
+def test_raw_to_bronze_logs_quality_gate(
+    raw_module, synthetic_raw_dict, tmp_path, monkeypatch, caplog
+):
+    """Ensure bronze stage emits a standardized quality-gate summary."""
+    input_path = tmp_path / "mock.mat"
+    output_path = tmp_path / "bronze.parquet"
+    input_path.touch()
+
+    monkeypatch.setattr(raw_module, "loadmat", lambda _: synthetic_raw_dict)
+    with caplog.at_level(logging.INFO):
+        raw_module.raw_to_bronze(raw_path=input_path, output_path=output_path)
+    assert "BRONZE QUALITY GATE: PASS" in caplog.text

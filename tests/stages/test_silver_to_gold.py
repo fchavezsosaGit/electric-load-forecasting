@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 
 import pandas as pd
@@ -178,3 +179,21 @@ def test_silver_to_gold_multi_resolution_outputs(
     assert len(outputs) == 2
     assert (gold_dir / "power_load_1m_all_features.parquet").exists()
     assert (gold_dir / "power_load_5m_all_features.parquet").exists()
+
+
+def test_silver_to_gold_logs_quality_gate(
+    gold_module, silver_module, synthetic_bronze_df, tmp_path, caplog
+):
+    """Ensure gold stage emits the standardized retention gate summary."""
+    _, silver_dir = _build_silver_inputs(silver_module, synthetic_bronze_df, tmp_path, ["1min"])
+    gold_dir = tmp_path / "gold"
+
+    with caplog.at_level(logging.INFO):
+        gold_module.silver_to_gold(
+            silver_dir=silver_dir,
+            gold_dir=gold_dir,
+            resolutions=["1min"],
+        )
+
+    assert "GOLD QUALITY GATE: PASS" in caplog.text
+    assert "resolution=1min" in caplog.text

@@ -107,7 +107,7 @@ Four canonical feature sets are defined for structured experimentation:
 | `curated` | 11 (selected lags, rolling stats, slope) | Balanced signal with reduced collinearity |
 | `full` | 41 (all non-metadata columns) | Maximum information content benchmark |
 
-Report IV modeling is currently executed as a **1-minute MVP** with fixed,
+Report IV modeling is currently executed as a **1-minute Minimum Viable Product (MVP)** with fixed,
 reproducible experiment design:
 
 - 24-grid comparison: 4 feature sets x 6 model configurations
@@ -121,12 +121,12 @@ Current hypothesis posture:
 
 | ID | Hypothesis | Metric | Target | MVP Status |
 |----|-----------|--------|--------|------------|
-| H1 | Workday signal adds measurable value beyond calendar structure | MAE | >=10% improvement | Evaluated at `1min` |
-| H2 | Lag/rolling context reduces large transition errors | RMSE | >=8% improvement | Evaluated at `1min` |
+| H1 | Workday signal adds measurable value beyond calendar structure | Mean Absolute Error (MAE) | >=10% improvement | Evaluated at `1min` |
+| H2 | Lag/rolling context reduces large transition errors | Root Mean Squared Error (RMSE) | >=8% improvement | Evaluated at `1min` |
 | H3 | Resolution tradeoff (`1min` vs `5min`) | MAE | <=5% degradation | Deferred (multi-resolution phase) |
 | H4 | Nonlinear model behavior vs regularized linear baseline | MAE/RMSE | Exploratory | Evaluated at `1min` |
 
-The current MVMP anchor is `1min` + `minimal` for initialization, with all
+The current Minimum Viable Modeling Product (MVMP) anchor is `1min` + `minimal` for initialization, with all
 experiments executed in online single-step forecasting mode.
 
 For full definitions, see:
@@ -161,13 +161,7 @@ to avoid post-hoc reconciliation risk.
 
 1. Clone this repository.
 
-2. Install dependencies:
-
-```bash
-pip install -e ".[dev]"
-```
-
-Or use the bootstrap scripts at repo root:
+2. Bootstrap a local environment from the repo-owned scripts:
 
 ```bash
 ./setup.sh
@@ -175,6 +169,20 @@ Or use the bootstrap scripts at repo root:
 
 ```powershell
 .\setup.ps1
+```
+
+Optional variants:
+
+```bash
+./setup.sh --venv-dir .venv311
+./setup.sh --no-venv
+python scripts/bootstrap_env.py --install --with-dev --check
+```
+
+```powershell
+.\setup.ps1 -VenvDir .venv311
+.\setup.ps1 -NoVenv
+python scripts/bootstrap_env.py --install --with-dev --check
 ```
 
 3. Review configuration files (TOML-backed runtime config):
@@ -186,7 +194,9 @@ config/eda.toml
 
 `config/pipeline.toml` includes operational contracts such as:
 - raw ingestion contract (`seconds_per_day`, required MATLAB keys)
-- silver quality warning threshold (`silver_nan_drop_warn_pct`)
+- quality thresholds for raw NaN tolerance, silver drop-rate gates, gold retention,
+  and model split completeness
+- centralized generated-artifact paths for modeling and Stage-5 performance outputs
 
 4. Place raw data at the expected path:
 
@@ -210,6 +220,18 @@ python run_pipeline.py --dry-run
 python run_pipeline.py
 ```
 
+Run the full reproducibility workflow from one entrypoint:
+
+```bash
+./run_e2e.sh --mode full
+PYTHON_BIN=python3.12 ./run_e2e.sh --mode quick
+```
+
+```powershell
+.\run_e2e.ps1 --mode full
+.\run_e2e.ps1 -PythonExe py -- --mode quick
+```
+
 ## Running the Pipeline
 
 Run all stages (bronze, silver, gold):
@@ -224,6 +246,8 @@ Run a single stage:
 python run_pipeline.py --stage bronze
 python run_pipeline.py --stage silver
 python run_pipeline.py --stage gold
+python run_pipeline.py --stage performance --performance-mode quick
+python run_pipeline.py --stage performance --performance-mode full
 ```
 
 Run a single resolution:
@@ -245,6 +269,24 @@ Verbose logging:
 python run_pipeline.py --verbose
 ```
 
+Run all data stages and include Stage-5 performance:
+
+```bash
+python run_pipeline.py --stage all --include-performance --performance-mode quick
+```
+
+Root E2E runner:
+
+```bash
+python scripts/run_e2e.py --mode full
+```
+
+Quick smoke path:
+
+```bash
+python scripts/run_e2e.py --mode quick
+```
+
 Logs are written to `logs/pipeline.log`.
 
 Optional logging overrides:
@@ -259,12 +301,13 @@ Run the complete modeling chain used for Report IV artifacts:
 python run_pipeline.py --stage all
 python scripts/003_create_model_datasets.py
 python scripts/validate_notebooks.py --notebook notebooks/003_modeling.ipynb
+python run_pipeline.py --stage performance --performance-mode full
 ```
 
 Modeling outputs are written to:
 
 ```text
-outputs/step4_artifacts/
+outputs/004_modeling/
 ```
 
 Expected artifact files:
@@ -276,6 +319,36 @@ Expected artifact files:
 - `fig_error_by_hour.png`
 - `fig_model_comparison.png`
 - `fig_day_ahead.png`
+
+Stage-5 performance artifacts are written to:
+
+```text
+outputs/005_performance/
+```
+
+Expected Stage-5 artifact files:
+- `preflight_audit.md`
+- `feature_causality_audit.csv`
+- `minute_integrity_audit.csv`
+- `holdout_lock.json`
+- `metrics_fold.csv`
+- `metrics_fold_summary.json`
+- `selection_scoreboard.csv`
+- `residual_ablation.csv`
+- `hgb_coordinate_summary.csv`
+- `guardrail_decisions.csv`
+- `guardrail_summary.csv`
+- `run_manifest.json`
+
+Stage-5 adds a derived feature set `curated_ramp` (causal short-horizon ramp indicators)
+to benchmark morning-ramp robustness against the baseline curated set.
+Stage-5 full mode also runs HGB coordinate-search regularization and a causal
+blend guardrail policy on the best HGB candidate. The resulting Stage-5 artifacts
+are summarized inside `notebooks/003_modeling.ipynb` when they are present; a
+standalone `004_performance.ipynb` is intentionally no longer used.
+If `outputs/004_modeling/run_manifest.json` is missing, `run_pipeline.py --stage performance`
+now bootstraps `scripts/003_create_model_datasets.py` plus `notebooks/003_modeling.ipynb`
+before running Stage-5 so the dependency chain stays intact.
 
 ## Tooling Files
 
@@ -307,14 +380,19 @@ silver resolution/profile matrix checks):
 python scripts/validate_notebooks.py
 ```
 
-Latest verification snapshot (2026-03-04):
-- `python run_pipeline.py --stage all` -> success (bronze/silver/gold rebuilt for all configured resolutions)
-- `python scripts/validate_notebooks.py` -> success (default smoke scope: `000_raw_eda.ipynb` through `003_modeling.ipynb` + silver profile matrix)
-- `pytest -q tests/notebooks/test_validate_notebooks.py` -> `4 passed`
+Retain notebook cell outputs only when explicitly needed:
 
-Latest full-suite reference snapshot (2026-02-20):
-- `pytest -q` -> `98 passed`
-- `pyright run_pipeline.py scripts tests` -> `0 errors, 0 warnings`
+```bash
+python scripts/validate_notebooks.py --keep-output
+```
+
+Latest verification snapshot (2026-03-06):
+- `python run_pipeline.py --stage all` -> success (bronze/silver/gold rebuilt for all configured resolutions)
+- `python run_pipeline.py --stage all --include-performance --performance-mode full` -> success (full integrated bronze/silver/gold/performance pass)
+- `python scripts/run_e2e.py --mode full` -> success (`2813.70s` total; pipeline `2611.81s`, notebooks `174.87s`, pytest `27.01s`)
+- `python scripts/validate_notebooks.py` -> success (default smoke scope: `000_raw_eda.ipynb` through `003_modeling.ipynb` + silver profile matrix; transient cell outputs cleared after execution)
+- `pytest -q tests/notebooks/test_validate_notebooks.py tests/performance/test_model_performance.py` -> success
+- `pytest -q` -> success
 
 ## Documentation Index
 
@@ -388,21 +466,28 @@ electric-load-forecasting/
 |   |-- 000_raw_eda.ipynb                  Raw data exploratory analysis
 |   |-- 001_bronze_eda.ipynb               Bronze data exploratory analysis
 |   |-- 002_silver_eda.ipynb               Silver data exploratory analysis
-|   `-- 003_modeling.ipynb                 Report IV modeling experiments and artifact export
+|   `-- 003_modeling.ipynb                 Report IV modeling plus optional Stage-5 artifact summary
 |-- outputs/
-|   `-- step4_artifacts/                   Modeling metrics, figures, and run manifest
+|   |-- 004_modeling/                     Generated modeling metrics, figures, and run manifest
+|   `-- 005_performance/                  Generated preflight/walk-forward/residual performance artifacts
 |-- scripts/
+|   |-- bootstrap_env.py                  Dependency bootstrap/check helper for setup scripts
 |   |-- config.py                         Centralized paths, schemas, feature config
 |   |-- utils.py                          Shared feature engineering utilities
 |   |-- 000_raw_to_bronze.py              Raw-to-bronze ingestion
 |   |-- 001_bronze_to_silver.py           Bronze-to-silver transformation
 |   |-- 002_silver_to_gold.py             Silver-to-gold validation
 |   |-- 003_create_model_datasets.py      Model dataset generation
+|   |-- 004_model_performance.py          Stage-5 preflight + walk-forward model performance
+|   |-- run_e2e.py                        Unified repository E2E runner
 |   `-- validate_notebooks.py             Notebook smoke-run tool
+|-- run_e2e.sh                            Unix-like E2E wrapper
+|-- run_e2e.ps1                           PowerShell E2E wrapper
 |-- tests/
 |   |-- conftest.py                       Pytest fixtures (synthetic data)
 |   |-- unit/
 |   |   |-- test_config.py                Configuration validation tests
+|   |   |-- test_bootstrap_env.py         Bootstrap dependency-helper tests
 |   |   `-- test_feature_engineering.py   Shared utility/feature tests
 |   |-- stages/
 |   |   |-- test_raw_to_bronze.py         Bronze ingestion tests
@@ -410,12 +495,15 @@ electric-load-forecasting/
 |   |   |-- test_silver_to_gold.py        Gold validation tests
 |   |   `-- test_model_datasets.py        Split and leakage tests
 |   |-- orchestration/
-|   |   `-- test_run_pipeline.py          Orchestrator CLI and error-path tests
+|   |   |-- test_run_pipeline.py          Orchestrator CLI and error-path tests
+|   |   `-- test_run_e2e.py              Repository E2E runner tests
 |   |-- integration/
 |   |   `-- test_integration.py           End-to-end synthetic pipeline tests
-|   `-- notebooks/
+|   |-- notebooks/
 |       |-- test_validate_notebooks.py    Notebook runner behavior tests
 |       `-- test_notebook_structure.py    Notebook quality guard tests
+|   `-- performance/
+|       `-- test_model_performance.py     Stage-5 performance workflow helper tests
 |-- run_pipeline.py                       Pipeline orchestrator
 |-- pyproject.toml                        Single source of truth for dependencies/tools
 |-- pyrightconfig.json                    Static type-check import path configuration

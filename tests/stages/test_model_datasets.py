@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 
 import numpy as np
@@ -201,3 +202,21 @@ def test_create_model_datasets_split_ranges_match_config(model_dataset_module, t
     assert split_to_days["train"] == 25
     assert split_to_days["validate"] == 3
     assert split_to_days["test"] == 3
+
+
+def test_create_model_datasets_logs_quality_gate(model_dataset_module, tmp_path, caplog):
+    """Ensure model dataset generation emits the standardized completion gate."""
+    gold_dir = tmp_path / "gold"
+    model_dir = tmp_path / "model"
+    _write_gold(gold_dir, "1m", _build_full_gold_df())
+
+    with caplog.at_level(logging.INFO):
+        model_dataset_module.create_model_datasets(
+            gold_dir=gold_dir,
+            model_dir=model_dir,
+            resolutions=["1min"],
+            feature_sets=["minimal"],
+        )
+
+    assert "MODEL DATASETS GATE: PASS" in caplog.text
+    assert "written_files=3" in caplog.text

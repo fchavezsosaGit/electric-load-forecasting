@@ -102,7 +102,8 @@ with its upstream and downstream neighbors.
 The repository now includes an explicit modeling/evaluation path layered on top of the
 medallion pipeline. This path keeps validation model selection and holdout testing
 separate, with a coverage guard to prevent low-coverage rows from biasing holdout
-selection.
+selection, and adds a Stage-5 performance layer for walk-forward robustness checks
+without introducing a second report notebook.
 
 ```text
 gold/model datasets (1min)
@@ -110,11 +111,11 @@ gold/model datasets (1min)
         v
 notebooks/003_modeling.ipynb
   - baselines: persistence / previous_day / avg_workday
-  - 24-grid: 4 feature sets x (ridge x3, hgb x3)
+  - 24-grid: 4 feature sets x (Ridge x3, HistGradientBoostingRegressor (HGB) x3)
   - H1 control + day-ahead extension
         |
         v
-validation metrics (outputs/step4_artifacts/metrics_overall.csv)
+validation metrics (outputs/004_modeling/metrics_overall.csv)
         |
         +--> raw-best by MAE (for audit visibility)
         |
@@ -128,14 +129,35 @@ validation metrics (outputs/step4_artifacts/metrics_overall.csv)
                  |
                  v
 run_manifest.json + report figures/CSVs
+        |
+        v
+scripts/004_model_performance.py
+  - preflight protocol checks
+  - walk-forward fold evaluation
+  - residual-target ablation
+  - HGB coordinate search
+  - causal blend guardrail
+        |
+        +--> outputs/005_performance/*
+        |
+        v
+notebooks/003_modeling.ipynb
+  - optional Stage-5 artifact summary
 ```
 
 Key artifacts:
-- `outputs/step4_artifacts/metrics_overall.csv`
-- `outputs/step4_artifacts/metrics_by_day_class.csv`
-- `outputs/step4_artifacts/metrics_by_hour.csv`
-- `outputs/step4_artifacts/run_manifest.json`
-- `outputs/step4_artifacts/fig_*.png`
+- `outputs/004_modeling/metrics_overall.csv`
+- `outputs/004_modeling/metrics_by_day_class.csv`
+- `outputs/004_modeling/metrics_by_hour.csv`
+- `outputs/004_modeling/run_manifest.json`
+- `outputs/004_modeling/fig_*.png`
+- `outputs/005_performance/preflight_audit.md`
+- `outputs/005_performance/metrics_fold.csv`
+- `outputs/005_performance/selection_scoreboard.csv`
+- `outputs/005_performance/residual_ablation.csv`
+- `outputs/005_performance/hgb_coordinate_summary.csv`
+- `outputs/005_performance/guardrail_decisions.csv`
+- `outputs/005_performance/guardrail_summary.csv`
 
 ## Resolution Policy
 
@@ -177,7 +199,9 @@ directly from project root.
 Key exports:
 - `PROJECT_ROOT`, `PATHS` -- canonical file and directory locations
 - `SECONDS_PER_DAY`, `MATLAB_REQUIRED_KEYS` -- raw ingestion contract
-- `SILVER_NAN_DROP_WARN_PCT` -- silver quality warning threshold
+- `RAW_MAX_NAN_PCT`, `RAW_MAX_OUT_OF_RANGE_PCT` -- raw/bronze gate thresholds
+- `SILVER_NAN_DROP_WARN_PCT`, `SILVER_NAN_DROP_FAIL_PCT` -- silver gate thresholds
+- `GOLD_MIN_RETENTION_PCT`, `MODEL_MIN_SPLIT_ROWS` -- downstream gate thresholds
 - `SUPPORTED_RESOLUTIONS`, `DEFAULT_RESOLUTIONS`, `RESOLUTION_ALIASES` -- resolution handling
 - `EDA_CONFIG` -- centralized notebook visualization and analysis defaults
 - `EDA_RESOLUTION_MODES`, `EDA_DEFAULT_RESOLUTION_MODE` -- notebook resolution mode controls

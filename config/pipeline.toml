@@ -5,6 +5,8 @@ silver_dir = "data/002_silver"
 gold_dir = "data/003_gold"
 model_dir = "data/004_model"
 logs_dir = "logs"
+outputs_modeling_dir = "outputs/004_modeling"
+outputs_performance_dir = "outputs/005_performance"
 
 [raw_contract]
 seconds_per_day = 86400
@@ -45,7 +47,12 @@ test = [29, 31]
 column = "avg_load"
 
 [quality_thresholds]
+raw_max_nan_pct = 2.0
+raw_max_out_of_range_pct = 0.0
 silver_nan_drop_warn_pct = 5.0
+silver_nan_drop_fail_pct = 10.0
+gold_min_retention_pct = 95.0
+model_min_split_rows = 1
 
 [feature_sets.minimal]
 columns = ["workday", "hour", "lag_1"]

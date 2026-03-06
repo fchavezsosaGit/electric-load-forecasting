@@ -69,7 +69,7 @@ automatic and fixed-parameter behaviors.
 
 Declarative configuration is stored under `config/`:
 - `config/pipeline.toml`: pipeline paths, resolution policy, feature windows, day-class
-  mapping, split ranges, target, feature sets, raw ingestion contract, and quality thresholds.
+  mapping, split ranges, target, feature sets, raw ingestion contract, and stage quality thresholds.
 - `config/eda.toml`: notebook visualization and analysis defaults, physical range bounds,
   and default notebook resolution mode.
 
@@ -77,6 +77,13 @@ Declarative configuration is stored under `config/`:
 normalizes types (for example path strings to `Path` objects and split lists to tuples),
 builds computed values (`SILVER_COLUMNS`, `SCHEMAS`, `full` feature set), and enforces
 runtime validation through `validate_config()`.
+
+Stage-end gate logging now uses those centralized thresholds to emit:
+- `BRONZE QUALITY GATE`
+- `SILVER QUALITY GATE`
+- `GOLD QUALITY GATE`
+- `MODEL DATASETS GATE`
+- `PIPELINE HEALTH`
 
 ## Raw Layer
 
@@ -178,11 +185,33 @@ Logging override:
 Common commands:
 
 ```bash
+./setup.sh
 python run_pipeline.py
 python run_pipeline.py --stage silver --resolution 15min
 python run_pipeline.py --stage gold --resolution 60s
+python run_pipeline.py --stage performance --performance-mode quick
+python run_pipeline.py --stage performance --performance-mode full
+python scripts/run_e2e.py --mode quick
+python scripts/run_e2e.py --mode full
 python run_pipeline.py --dry-run
 ```
+
+Run all data stages and include Stage-5 performance evaluation:
+
+```bash
+python run_pipeline.py --stage all --include-performance --performance-mode quick
+```
+
+Performance mode details:
+- `quick`: smoke path (curated + curated_ramp, 2 folds, residual + blend guardrail).
+- `full`: full fold grid with HGB coordinate regularization search and blend guardrail output.
+- `preflight`: protocol checks only, no fold training.
+
+Root wrappers are available for both shells:
+- `./run_e2e.sh`
+- `.\run_e2e.ps1`
+- `PYTHON_BIN=python3.12 ./run_e2e.sh --mode quick`
+- `.\run_e2e.ps1 -PythonExe py -- --mode quick`
 
 Notebook smoke validation:
 
@@ -194,16 +223,24 @@ Validation behavior notes:
 - Notebook execution uses a Python-managed nbconvert runner in
   `scripts/validate_notebooks.py` so Windows runs apply selector event-loop policy
   automatically and avoid prior `zmq` runtime warnings.
+- Notebook validation now clears transient cell outputs after successful execution by
+  default so tracked notebooks do not retain machine-specific warning paths or local
+  runtime noise. Use `--keep-output` only when notebook output retention is intentional.
 - Default smoke scope includes `000_raw_eda.ipynb`, `001_bronze_eda.ipynb`,
   `002_silver_eda.ipynb`, and `003_modeling.ipynb`.
 - Silver notebook validation includes baseline plus three profile runs:
   `default`, `all`, and `custom`.
+- Stage-5 performance is executed through `scripts/004_model_performance.py`
+  (or `run_pipeline.py --stage performance`) and summarized back into
+  `003_modeling.ipynb` when artifacts exist.
+- When Stage-5 is invoked through `run_pipeline.py` and step-4 artifacts are
+  missing, the orchestrator now bootstraps model dataset generation plus the
+  `003_modeling.ipynb` artifact export before running performance.
 
-Latest verification snapshot (2026-03-04):
+Latest verification snapshot (2026-03-06):
 - `python run_pipeline.py --stage all` -> success (bronze/silver/gold rebuilt for all configured resolutions)
-- `python scripts/validate_notebooks.py` -> success (default smoke scope: `000_raw_eda.ipynb` through `003_modeling.ipynb` + silver profile matrix)
-- `pytest -q tests/notebooks/test_validate_notebooks.py` -> `4 passed`
-
-Latest full-suite reference snapshot (2026-02-20):
-- `pytest -q` -> `98 passed`
-- `pyright run_pipeline.py scripts tests` -> `0 errors, 0 warnings`
+- `python run_pipeline.py --stage all --include-performance --performance-mode full` -> success (full integrated bronze/silver/gold/performance pass)
+- `python scripts/run_e2e.py --mode full` -> success (`2813.70s` total; pipeline `2611.81s`, notebooks `174.87s`, pytest `27.01s`)
+- `python scripts/validate_notebooks.py` -> success (default smoke scope: `000_raw_eda.ipynb` through `003_modeling.ipynb` + silver profile matrix; transient cell outputs cleared after execution)
+- `pytest -q tests/notebooks/test_validate_notebooks.py tests/performance/test_model_performance.py` -> success
+- `pytest -q` -> success

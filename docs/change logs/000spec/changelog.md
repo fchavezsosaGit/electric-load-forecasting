@@ -3,6 +3,47 @@
 All notable project planning and implementation changes should be documented here.
 Entries are grouped by date and capability area so the history stays readable as the project grows.
 
+## 2026-03-06
+
+### Bootstrap and E2E Foundation Refresh
+
+Scope:
+- `config/pipeline.toml`
+- `scripts/config.py`
+- `scripts/bootstrap_env.py`
+- `scripts/run_e2e.py`
+- `setup.sh`
+- `setup.ps1`
+- `run_e2e.sh`
+- `run_e2e.ps1`
+- `.gitignore`
+- `README.md`
+- `docs/002_pipeline/pipeline.md`
+
+What changed:
+- Centralized generated artifact directories in TOML-backed `PATHS`:
+  - `outputs_modeling_dir`
+  - `outputs_performance_dir`
+- Added a shared dependency/bootstrap helper so both shell families use the
+  same environment installation and smoke-check path.
+- Added a repo-level E2E runner that standardizes:
+  - full pipeline rebuild
+  - optional Stage-5 execution
+  - notebook validation
+  - pytest execution
+- Added root wrapper scripts for local E2E.
+- Tightened repository hygiene:
+  - `.gitignore` extended for local editor files
+  - hardcoded-path governance test expanded to cover repo-owned code, shell, TOML,
+    notebook, and YAML files
+- Made notebook execution dependencies explicit in `pyproject.toml` and corrected
+  the `pyarrow` environment marker so supported environments remain eligible.
+
+Why this was needed:
+- The repo previously relied on good local state more than explicit bootstrap and
+  verification entrypoints.
+- Setup logic was duplicated across shell families, increasing drift risk.
+
 ## 2026-02-20
 
 ### Documentation and Verification Refresh (Latest)

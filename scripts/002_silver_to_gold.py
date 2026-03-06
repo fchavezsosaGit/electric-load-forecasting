@@ -20,8 +20,8 @@ if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
 
 from config import DEFAULT_RESOLUTIONS, RESOLUTION_ALIASES, SUPPORTED_RESOLUTIONS
-from config import PATHS, RESOLUTION_TO_SUFFIX, SCHEMAS, VALID_DAY_CLASSES
-from utils import validate_schema_columns
+from config import GOLD_MIN_RETENTION_PCT, PATHS, RESOLUTION_TO_SUFFIX, SCHEMAS, VALID_DAY_CLASSES
+from utils import emit_quality_gate, validate_schema_columns
 
 logger = logging.getLogger(__name__)
 
@@ -171,6 +171,19 @@ def silver_to_gold(
             gold["timestamp"].max() if not gold.empty else None,
         )
         logger.info("Gold null counts (%s): %s", resolution, post_null_counts)
+        retention_pct = (gold.shape[0] / input_rows) * 100.0 if input_rows else 0.0
+        emit_quality_gate(
+            "GOLD QUALITY GATE",
+            retention_pct >= GOLD_MIN_RETENTION_PCT and not gold.empty,
+            details={
+                "resolution": resolution,
+                "input_rows": input_rows,
+                "output_rows": gold.shape[0],
+                "retention_pct": f"{retention_pct:.2f}",
+                "retention_threshold_pct": f"{GOLD_MIN_RETENTION_PCT:.2f}",
+            },
+            logger_instance=logger,
+        )
         outputs.append(output_path)
 
     return outputs

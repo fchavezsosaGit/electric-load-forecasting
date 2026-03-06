@@ -158,6 +158,8 @@ PATHS: Final[dict[str, Path]] = {
     "gold_dir": _resolve_path(_paths["gold_dir"]),
     "model_dir": _resolve_path(_paths["model_dir"]),
     "logs_dir": _resolve_path(_paths["logs_dir"]),
+    "outputs_modeling_dir": _resolve_path(_paths["outputs_modeling_dir"]),
+    "outputs_performance_dir": _resolve_path(_paths["outputs_performance_dir"]),
 }
 
 _raw_contract = cast(dict[str, object], _PIPELINE_TOML["raw_contract"])
@@ -288,9 +290,29 @@ SPLIT_DAY_RANGES: Final[dict[str, tuple[int, int]]] = {
 
 TARGET_COLUMN: Final[str] = cast(dict[str, str], _PIPELINE_TOML["target"])["column"]
 _quality_thresholds = cast(dict[str, object], _PIPELINE_TOML["quality_thresholds"])
+RAW_MAX_NAN_PCT: Final[float] = _as_float(
+    "quality_thresholds.raw_max_nan_pct",
+    _quality_thresholds["raw_max_nan_pct"],
+)
+RAW_MAX_OUT_OF_RANGE_PCT: Final[float] = _as_float(
+    "quality_thresholds.raw_max_out_of_range_pct",
+    _quality_thresholds["raw_max_out_of_range_pct"],
+)
 SILVER_NAN_DROP_WARN_PCT: Final[float] = _as_float(
     "quality_thresholds.silver_nan_drop_warn_pct",
     _quality_thresholds["silver_nan_drop_warn_pct"],
+)
+SILVER_NAN_DROP_FAIL_PCT: Final[float] = _as_float(
+    "quality_thresholds.silver_nan_drop_fail_pct",
+    _quality_thresholds["silver_nan_drop_fail_pct"],
+)
+GOLD_MIN_RETENTION_PCT: Final[float] = _as_float(
+    "quality_thresholds.gold_min_retention_pct",
+    _quality_thresholds["gold_min_retention_pct"],
+)
+MODEL_MIN_SPLIT_ROWS: Final[int] = _as_int(
+    "quality_thresholds.model_min_split_rows",
+    _quality_thresholds["model_min_split_rows"],
 )
 
 _feature_sets_toml = cast(dict[str, dict[str, list[str]]], _PIPELINE_TOML["feature_sets"])
@@ -542,10 +564,39 @@ def validate_config() -> None:
         raise ValueError(f"SECONDS_PER_DAY must be positive. Got: {SECONDS_PER_DAY}")
     if not MATLAB_REQUIRED_KEYS:
         raise ValueError("MATLAB_REQUIRED_KEYS must not be empty.")
+    if RAW_MAX_NAN_PCT < 0.0 or RAW_MAX_NAN_PCT > 100.0:
+        raise ValueError(
+            "RAW_MAX_NAN_PCT must be within [0, 100]. "
+            f"Got: {RAW_MAX_NAN_PCT}"
+        )
+    if RAW_MAX_OUT_OF_RANGE_PCT < 0.0 or RAW_MAX_OUT_OF_RANGE_PCT > 100.0:
+        raise ValueError(
+            "RAW_MAX_OUT_OF_RANGE_PCT must be within [0, 100]. "
+            f"Got: {RAW_MAX_OUT_OF_RANGE_PCT}"
+        )
     if SILVER_NAN_DROP_WARN_PCT < 0.0 or SILVER_NAN_DROP_WARN_PCT > 100.0:
         raise ValueError(
             "SILVER_NAN_DROP_WARN_PCT must be within [0, 100]. "
             f"Got: {SILVER_NAN_DROP_WARN_PCT}"
+        )
+    if SILVER_NAN_DROP_FAIL_PCT < 0.0 or SILVER_NAN_DROP_FAIL_PCT > 100.0:
+        raise ValueError(
+            "SILVER_NAN_DROP_FAIL_PCT must be within [0, 100]. "
+            f"Got: {SILVER_NAN_DROP_FAIL_PCT}"
+        )
+    if SILVER_NAN_DROP_WARN_PCT > SILVER_NAN_DROP_FAIL_PCT:
+        raise ValueError(
+            "SILVER_NAN_DROP_WARN_PCT must be <= SILVER_NAN_DROP_FAIL_PCT. "
+            f"Got warn={SILVER_NAN_DROP_WARN_PCT}, fail={SILVER_NAN_DROP_FAIL_PCT}"
+        )
+    if GOLD_MIN_RETENTION_PCT < 0.0 or GOLD_MIN_RETENTION_PCT > 100.0:
+        raise ValueError(
+            "GOLD_MIN_RETENTION_PCT must be within [0, 100]. "
+            f"Got: {GOLD_MIN_RETENTION_PCT}"
+        )
+    if MODEL_MIN_SPLIT_ROWS <= 0:
+        raise ValueError(
+            f"MODEL_MIN_SPLIT_ROWS must be positive. Got: {MODEL_MIN_SPLIT_ROWS}"
         )
 
     _validate_split_ranges_contiguous(SPLIT_DAY_RANGES)

@@ -13,6 +13,7 @@ import subprocess
 import sys
 from pathlib import Path
 
+import nbformat
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 NOTEBOOK_DIR = PROJECT_ROOT / "notebooks"
@@ -85,11 +86,27 @@ def execute_notebook(path: Path, env_overrides: dict[str, str] | None = None) ->
         raise RuntimeError(f"Notebook execution failed for {path}: {exc}") from exc
 
 
-def validate_notebooks(notebooks: list[Path]) -> None:
+def _clear_notebook_outputs(path: Path) -> None:
+    """Remove transient execution outputs while preserving source and counts."""
+    notebook = nbformat.read(path, as_version=4)
+    changed = False
+    for cell in notebook.cells:
+        if cell.get("cell_type") != "code":
+            continue
+        if cell.get("outputs"):
+            cell["outputs"] = []
+            changed = True
+    if changed:
+        nbformat.write(notebook, path)
+
+
+def validate_notebooks(notebooks: list[Path], *, clear_outputs: bool = True) -> None:
     """Execute all provided notebooks and raise on first failure."""
     for nb in notebooks:
         logger.info("Executing notebook: %s", nb)
         execute_notebook(nb)
+        if clear_outputs:
+            _clear_notebook_outputs(nb)
         if nb.name == SILVER_NOTEBOOK_NAME:
             for idx, profile in enumerate(SILVER_VALIDATION_PROFILES, start=1):
                 logger.info(
@@ -101,6 +118,8 @@ def validate_notebooks(notebooks: list[Path]) -> None:
                     profile.get("ELF_NB_AUTO_ACF_DEPTH"),
                 )
                 execute_notebook(nb, env_overrides=profile)
+                if clear_outputs:
+                    _clear_notebook_outputs(nb)
     logger.info("Notebook validation completed successfully.")
 
 
@@ -111,6 +130,11 @@ def parse_args() -> argparse.Namespace:
         "--notebook",
         action="append",
         help="Path to a notebook to execute. Can be provided multiple times.",
+    )
+    parser.add_argument(
+        "--keep-output",
+        action="store_true",
+        help="Retain cell outputs after execution instead of clearing transient notebook output.",
     )
     return parser.parse_args()
 
@@ -125,7 +149,7 @@ def main() -> int:
         notebooks = DEFAULT_NOTEBOOKS
 
     try:
-        validate_notebooks(notebooks)
+        validate_notebooks(notebooks, clear_outputs=not args.keep_output)
         return 0
     except Exception as exc:
         logger.error("Notebook validation failed: %s", exc)

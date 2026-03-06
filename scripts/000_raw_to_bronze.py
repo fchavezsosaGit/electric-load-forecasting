@@ -28,10 +28,13 @@ from config import (
     EDA_CONFIG,
     MATLAB_REQUIRED_KEYS,
     PATHS,
+    RAW_MAX_NAN_PCT,
+    RAW_MAX_OUT_OF_RANGE_PCT,
     SCHEMAS,
     SECONDS_PER_DAY,
     VALID_DAY_CLASSES,
 )
+from utils import emit_quality_gate
 
 logger = logging.getLogger(__name__)
 
@@ -226,6 +229,13 @@ def raw_to_bronze(raw_path: Path | None = None, output_path: Path | None = None)
     load_max = float(df["load"].max(skipna=True)) if df["load"].notna().any() else float("nan")
     load_mean = float(df["load"].mean(skipna=True)) if df["load"].notna().any() else float("nan")
     file_size_bytes = target_path.stat().st_size
+    nan_pct = float(df["load"].isna().mean() * 100.0)
+    out_of_range_pct = (out_of_range_count / expected_rows) * 100.0 if expected_rows else 0.0
+    bronze_gate_passed = (
+        nan_pct <= RAW_MAX_NAN_PCT
+        and out_of_range_pct <= RAW_MAX_OUT_OF_RANGE_PCT
+        and int(df["timestamp"].duplicated().sum()) == 0
+    )
 
     logger.info(
         "Bronze write complete: rows=%d, timestamp_min=%s, timestamp_max=%s",
@@ -248,6 +258,19 @@ def raw_to_bronze(raw_path: Path | None = None, output_path: Path | None = None)
     logger.info("Bronze null counts: %s", df.isna().sum().to_dict())
     logger.info("Bronze day_class distribution: %s", df["day_class"].value_counts().to_dict())
     logger.info("Bronze output saved: %s (%d bytes)", target_path, file_size_bytes)
+    emit_quality_gate(
+        "BRONZE QUALITY GATE",
+        bronze_gate_passed,
+        details={
+            "rows": df.shape[0],
+            "nan_pct": f"{nan_pct:.2f}",
+            "nan_threshold_pct": f"{RAW_MAX_NAN_PCT:.2f}",
+            "out_of_range_pct": f"{out_of_range_pct:.4f}",
+            "out_of_range_threshold_pct": f"{RAW_MAX_OUT_OF_RANGE_PCT:.4f}",
+            "duplicate_timestamps": int(df["timestamp"].duplicated().sum()),
+        },
+        logger_instance=logger,
+    )
 
     return target_path
 

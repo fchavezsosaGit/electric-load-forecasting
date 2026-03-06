@@ -54,7 +54,7 @@ The MVMP is successful when all conditions below are met:
    is executed once after model selection.
 3. **Baseline transparency**: Performance versus persistence/previous-day/avg-workday is
    explicitly reported, regardless of whether a model beats persistence.
-4. **Artifact completeness**: `outputs/step4_artifacts/` contains required CSV/PNG files.
+4. **Artifact completeness**: `outputs/004_modeling/` contains required CSV/PNG files.
 
 ## Persistence baseline definition
 

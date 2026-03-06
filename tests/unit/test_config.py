@@ -18,11 +18,16 @@ from scripts.config import (
     EDA_RESOLUTION_MODES,
     FEATURE_CONFIG,
     FEATURE_SETS,
+    GOLD_MIN_RETENTION_PCT,
     MATLAB_REQUIRED_KEYS,
+    MODEL_MIN_SPLIT_ROWS,
     PATHS,
+    RAW_MAX_NAN_PCT,
+    RAW_MAX_OUT_OF_RANGE_PCT,
     RESOLUTION_ALIASES,
     RESOLUTION_TO_SUFFIX,
     SECONDS_PER_DAY,
+    SILVER_NAN_DROP_FAIL_PCT,
     SILVER_NAN_DROP_WARN_PCT,
     SPLIT_DAY_RANGES,
     SCHEMAS,
@@ -88,6 +93,9 @@ def test_config_paths_are_path_objects_and_have_valid_parents():
         path.parent.mkdir(parents=True, exist_ok=True)
         assert path.parent.exists()
 
+    assert PATHS["outputs_modeling_dir"].name == "004_modeling"
+    assert PATHS["outputs_performance_dir"].name == "005_performance"
+
 
 def test_resolutions_are_valid_pandas_offsets():
     """Ensure supported and default resolutions map to valid positive timedeltas."""
@@ -143,8 +151,18 @@ def test_raw_and_quality_contract_values():
     assert SECONDS_PER_DAY > 0
     assert isinstance(MATLAB_REQUIRED_KEYS, tuple)
     assert MATLAB_REQUIRED_KEYS == ("P_data", "day_data", "day_class")
+    assert isinstance(RAW_MAX_NAN_PCT, float)
+    assert 0.0 <= RAW_MAX_NAN_PCT <= 100.0
+    assert isinstance(RAW_MAX_OUT_OF_RANGE_PCT, float)
+    assert 0.0 <= RAW_MAX_OUT_OF_RANGE_PCT <= 100.0
     assert isinstance(SILVER_NAN_DROP_WARN_PCT, float)
     assert 0.0 <= SILVER_NAN_DROP_WARN_PCT <= 100.0
+    assert isinstance(SILVER_NAN_DROP_FAIL_PCT, float)
+    assert SILVER_NAN_DROP_WARN_PCT <= SILVER_NAN_DROP_FAIL_PCT <= 100.0
+    assert isinstance(GOLD_MIN_RETENTION_PCT, float)
+    assert 0.0 <= GOLD_MIN_RETENTION_PCT <= 100.0
+    assert isinstance(MODEL_MIN_SPLIT_ROWS, int)
+    assert MODEL_MIN_SPLIT_ROWS > 0
 
 
 def test_day_class_map_constraints():
@@ -260,7 +278,14 @@ def test_toml_round_trip_consistency_with_module_exports():
     assert tuple(pipeline["splits"]["test"]) == SPLIT_DAY_RANGES["test"]
     assert pipeline["raw_contract"]["seconds_per_day"] == SECONDS_PER_DAY
     assert tuple(pipeline["raw_contract"]["required_keys"]) == MATLAB_REQUIRED_KEYS
+    assert pipeline["quality_thresholds"]["raw_max_nan_pct"] == RAW_MAX_NAN_PCT
+    assert pipeline["quality_thresholds"]["raw_max_out_of_range_pct"] == RAW_MAX_OUT_OF_RANGE_PCT
     assert pipeline["quality_thresholds"]["silver_nan_drop_warn_pct"] == SILVER_NAN_DROP_WARN_PCT
+    assert pipeline["quality_thresholds"]["silver_nan_drop_fail_pct"] == SILVER_NAN_DROP_FAIL_PCT
+    assert pipeline["quality_thresholds"]["gold_min_retention_pct"] == GOLD_MIN_RETENTION_PCT
+    assert pipeline["quality_thresholds"]["model_min_split_rows"] == MODEL_MIN_SPLIT_ROWS
+    assert Path(pipeline["paths"]["outputs_modeling_dir"]).name == PATHS["outputs_modeling_dir"].name
+    assert Path(pipeline["paths"]["outputs_performance_dir"]).name == PATHS["outputs_performance_dir"].name
 
     assert eda["analysis"]["histogram_bins"] == EDA_CONFIG["histogram_bins"]
     assert tuple(eda["visualization"]["figure_size"]) == EDA_CONFIG["figure_size"]

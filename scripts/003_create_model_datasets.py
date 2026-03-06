@@ -16,6 +16,7 @@ if str(SCRIPT_DIR) not in sys.path:
 from config import (
     DEFAULT_RESOLUTIONS,
     FEATURE_SETS,
+    MODEL_MIN_SPLIT_ROWS,
     PATHS,
     RESOLUTION_ALIASES,
     RESOLUTION_TO_SUFFIX,
@@ -24,6 +25,7 @@ from config import (
     TARGET_COLUMN,
     validate_config,
 )
+from utils import emit_quality_gate
 
 logger = logging.getLogger(__name__)
 
@@ -95,6 +97,7 @@ def create_model_datasets(
     )
 
     outputs: list[Path] = []
+    split_row_counts: list[int] = []
 
     for resolution in target_resolutions:
         canonical = RESOLUTION_ALIASES.get(resolution, resolution)
@@ -218,8 +221,24 @@ def create_model_datasets(
                     target_summary,
                     output_path,
                 )
+                split_row_counts.append(rows_after_dropna)
                 outputs.append(output_path)
 
+    expected_output_count = (
+        len(target_resolutions) * len(target_feature_sets) * len(SPLIT_DAY_RANGES)
+    )
+    empty_split_count = sum(1 for row_count in split_row_counts if row_count < MODEL_MIN_SPLIT_ROWS)
+    emit_quality_gate(
+        "MODEL DATASETS GATE",
+        len(outputs) == expected_output_count and empty_split_count == 0,
+        details={
+            "expected_files": expected_output_count,
+            "written_files": len(outputs),
+            "empty_splits": empty_split_count,
+            "min_split_rows": MODEL_MIN_SPLIT_ROWS,
+        },
+        logger_instance=logger,
+    )
     return outputs
 
 

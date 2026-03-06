@@ -8,7 +8,7 @@ from pathlib import Path
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
-SCAN_GLOBS = ("*.py", "*.toml", "*.ps1", "*.sh", "*.ipynb")
+SCAN_GLOBS = ("*.py", "*.toml", "*.ps1", "*.sh", "*.ipynb", "*.yml", "*.yaml", "*.md")
 SKIP_DIR_NAMES = {
     ".git",
     ".venv",
@@ -17,10 +17,9 @@ SKIP_DIR_NAMES = {
     "outputs",
     "data",
     "personal",
-    "docs",
 }
 ABSOLUTE_PATH_PATTERNS = (
-    re.compile(r"[A-Za-z]:[\\/](?:[^\n\r\t\"'<>|]+[\\/])+[^\n\r\t\"'<>|]*"),  # Windows drive paths
+    re.compile(r"(?<![A-Za-z0-9._-])[A-Za-z]:[\\/](?:[^\n\r\t\"'<>|]+[\\/])+[^\n\r\t\"'<>|]*"),  # Windows drive paths
     re.compile(r"/Users/[A-Za-z0-9._-]+/"),  # macOS home paths
     re.compile(r"/home/[A-Za-z0-9._-]+/"),  # Linux home paths
 )

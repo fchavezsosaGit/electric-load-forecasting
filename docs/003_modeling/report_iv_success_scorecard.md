@@ -3,9 +3,9 @@
 This scorecard maps the success framework in `personal/success.md` to the current
 repository state and latest executed artifacts.
 
-Date: 2026-03-04  
+Date: 2026-03-06  
 Scope: current codebase + latest full pipeline/modeling run  
-Primary evidence: `outputs/step4_artifacts/*`, pipeline outputs in `data/*`, and
+Primary evidence: `outputs/004_modeling/*`, pipeline outputs in `data/*`, and
 validation commands listed below.
 
 ---
@@ -25,14 +25,21 @@ This scorecard uses that framing and does not re-attribute core project directio
 
 ## Validation Commands Executed
 
+- `python scripts/run_e2e.py --mode full`
 - `python run_pipeline.py --stage all`
+- `python run_pipeline.py --stage all --include-performance --performance-mode full`
 - `python scripts/003_create_model_datasets.py`
 - `python scripts/validate_notebooks.py`
 - `python scripts/validate_notebooks.py --notebook notebooks/003_modeling.ipynb`
+- `python run_pipeline.py --stage performance --performance-mode full`
 - `pytest`
-- `pyright run_pipeline.py scripts tests`
 
-All commands completed successfully in this review pass.
+All runtime and test commands completed successfully in this review pass.
+Latest consolidated timing snapshot from `scripts/run_e2e.py --mode full`:
+- pipeline: `2611.81s`
+- notebooks: `174.87s`
+- pytest: `27.01s`
+- total: `2813.70s`
 
 ---
 
@@ -46,19 +53,20 @@ All commands completed successfully in this review pass.
 | Silver | 44-column feature engineering across default resolutions | `1m/5m/10m/15m` all generated, each `44` columns | PASS |
 | Gold | Null-safe modeling contract on required core columns | Gold outputs have `avg_load` null count `0` in all default resolutions | PASS |
 | Model datasets | Chronological split outputs for all feature sets/resolutions | `48` parquet files (`4 resolutions x 4 feature sets x 3 splits`) | PASS |
-| EDA notebooks | Executable notebooks with centralized config behavior | Full `validate_notebooks.py` completed (raw/bronze/silver profiles) | PASS |
+| Exploratory Data Analysis (EDA) notebooks | Executable notebooks with centralized config behavior | Full `validate_notebooks.py` completed (000-003 notebooks); Stage-5 is summarized inside `003_modeling.ipynb` after script execution | PASS |
 | Modeling MVP | 1min fixed grid + baselines + holdout protocol | 24-grid + H1 + day-ahead + baselines + one-shot holdout present in artifacts | PASS |
+| Stage-5 Performance | Preflight + fold evaluation + residual + regularization + blend guardrail | `005_performance` includes `hgb_coordinate_summary.csv` and guardrail outputs with causal replay | PASS |
 | Hypothesis execution | H1/H2/H4 evaluated; H3 explicitly deferred | H1/H2/H4 rows present; H3 documented deferred in MVP posture | PASS |
 | Evaluation integrity | Validation-driven selection; holdout not used for tuning | Coverage-guard selection policy serialized in `run_manifest.json` | PASS |
-| Infra/testing | Passing tests + static typing + operational commands | `98 passed`, `pyright: 0 errors/0 warnings` | PASS |
+| Infra/testing | Passing tests + operational commands | `pytest -q: success`, notebook validation + pipeline runs succeeded | PASS |
 | Documentation/governance | Current docs aligned to current behavior | Architecture/modeling/glossary/report docs refreshed in this pass | PASS |
 
 ---
 
 ## Modeling Performance Snapshot (Latest Run)
 
-Source: `outputs/step4_artifacts/metrics_overall.csv`,
-`outputs/step4_artifacts/run_manifest.json`
+Source: `outputs/004_modeling/metrics_overall.csv`,
+`outputs/004_modeling/run_manifest.json`
 
 ### Validation
 
@@ -124,4 +132,3 @@ state for Report IV execution:
 - Modeling/holdout protocol integrity: achieved
 - Documentation and references: updated to current implementation
 - Remaining work is primarily model-improvement iteration, not infrastructure repair
-

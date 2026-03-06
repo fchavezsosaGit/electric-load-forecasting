@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from typing import cast
 
 import pandas as pd
@@ -177,3 +178,21 @@ def test_bronze_to_silver_required_non_lag_columns_have_no_nulls(
     silver_df = pd.read_parquet(silver_dir / "power_load_1m.parquet")
     required = SCHEMAS["silver"]["required_not_null"]
     assert int(silver_df[required].isna().sum().sum()) == 0
+
+
+def test_bronze_to_silver_logs_quality_gate(
+    silver_module, synthetic_bronze_df, tmp_path, caplog
+):
+    """Ensure silver stage emits a standardized quality-gate summary per resolution."""
+    bronze_path = tmp_path / "bronze.parquet"
+    silver_dir = tmp_path / "silver"
+    synthetic_bronze_df.to_parquet(bronze_path, index=False)
+
+    with caplog.at_level(logging.INFO):
+        silver_module.bronze_to_silver(
+            bronze_path=bronze_path,
+            silver_dir=silver_dir,
+            resolutions=["1min"],
+        )
+    assert "SILVER QUALITY GATE: PASS" in caplog.text
+    assert "resolution=1min" in caplog.text
