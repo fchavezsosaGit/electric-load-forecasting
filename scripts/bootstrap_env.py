@@ -8,11 +8,12 @@ import subprocess
 import sys
 import tomllib
 from pathlib import Path
+from typing import Iterable
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 PYPROJECT_PATH = PROJECT_ROOT / "pyproject.toml"
 MIN_PYTHON = (3, 11)
-CORE_SMOKE_IMPORTS = (
+CORE_SMOKE_IMPORTS: tuple[str, ...] = (
     "numpy",
     "pandas",
     "matplotlib",
@@ -20,14 +21,14 @@ CORE_SMOKE_IMPORTS = (
     "sklearn",
     "statsmodels",
 )
-DEV_SMOKE_IMPORTS = (
+DEV_SMOKE_IMPORTS: tuple[str, ...] = (
     "pytest",
     "nbconvert",
     "nbformat",
     "jupyter",
     "ipykernel",
 )
-PARQUET_BACKENDS = ("pyarrow", "fastparquet")
+PARQUET_BACKENDS: tuple[str, ...] = ("pyarrow", "fastparquet")
 
 
 def _load_pyproject() -> dict[str, object]:
@@ -35,7 +36,7 @@ def _load_pyproject() -> dict[str, object]:
         return tomllib.load(handle)
 
 
-def _unique(values: list[str]) -> list[str]:
+def _unique(values: Iterable[str]) -> list[str]:
     return list(dict.fromkeys(values))
 
 
