@@ -19,6 +19,11 @@ and the matching entries in the spec-specific changelog at
 precedence. The root [changelog.md](../../changelog.md) serves as an index pointing
 to spec-specific changelogs.
 
+Current operating-direction note:
+- SPEC-00 remains the infrastructure and pipeline hardening source of truth.
+- The active optimizer-facing modeling direction now lives in
+  [002_operating_direction_spec.md](002_operating_direction_spec.md).
+
 ## Revision R2 (2026-02-20): Resolution and documentation governance update
 
 This revision formalizes two operational requirements:
@@ -406,7 +411,7 @@ Gold definition:
 - Create `scripts/002_silver_to_gold.py` that reads silver outputs and produces gold outputs.
 - Define and document what gold adds beyond silver:
   - Gold = silver with rows dropped where required core modeling columns are null.
-  - Schema is identical to silver (44 columns, same dtypes).
+  - Schema is identical to silver (82 columns, same dtypes).
   - No additional features or transformations are applied.
   - Document the chosen definition in a docstring and in `docs/002_pipeline/pipeline.md`.
 - Define `required_not_null` columns in `SCHEMAS["gold"]` in config: `timestamp`, `day_class`, `workday`, `year`, `quarter`, `month`, `day`, `day_of_week`, `hour`, `season`, `time_of_day`, `avg_load`.
@@ -456,7 +461,7 @@ Determinism:
 
 Acceptance criteria:
 - Running `python scripts/002_silver_to_gold.py` regenerates gold files for all configured default resolutions from silver inputs.
-- Gold output schema is identical to silver (44 columns, same dtypes).
+- Gold output schema is identical to silver (82 columns, same dtypes).
 - Rows with null in any `required_not_null` column are dropped.
 - Lag, rolling, delta, and slope NaN values are preserved (not used as drop criteria).
 - Log output includes: row counts (input and output), drop count and percentage, per-column NaN breakdown, and timestamp bounds per resolution.
@@ -550,7 +555,7 @@ Test infrastructure:
 - Test that `DAY_CLASS_MAP` contains exactly `{"full", "half", "none"}` as keys.
 
 `tests/stages/test_silver_to_gold.py`:
-- Test that gold output has the same 44-column schema as silver.
+- Test that gold output has the same 48-column schema as silver.
 - Test that gold has fewer rows than silver (NaN rows in required core columns are dropped).
 - Test that NaN values in lag/rolling/delta/slope columns are preserved (not used as drop criteria).
 - Test that `ValueError` is raised when silver input file is missing.
@@ -571,7 +576,7 @@ Test infrastructure:
 - Test that `ValueError` is raised for an unknown feature set name.
 - Test that `ValueError` is raised when a feature set column is missing from gold.
 - Test that `ValueError` is raised when a feature set includes the target column.
-- Test all four feature sets (`minimal`, `temporal`, `full`, `curated`) produce outputs with correct column counts.
+- Test all configured feature sets (`minimal`, `temporal`, `full`, `curated`, `full_stable`) produce outputs with correct column counts.
 - Test that multiple resolutions produce independent model dataset files.
 - Test that split day ranges match `SPLIT_DAY_RANGES` in config (train=days 1-25, validate=26-28, test=29-31).
 
@@ -643,7 +648,7 @@ Tasks:
 `docs/002_pipeline/pipeline.md` updates:
 - Fix line 19: says "two attributes" but lists three (`P_data`, `day_data`, `day_class`). Change to "three attributes".
 - Add Bronze layer section: describe schema (`timestamp`, `day_class`, `load`), row count (2,678,400), storage format (parquet), and generation command.
-- Add Silver layer section: describe resolutions (1m/5m/10m), schema (44 columns for 1m), feature groups (temporal, business, load history), NaN handling strategy, and generation command.
+- Add Silver layer section: describe resolutions (1m/5m/10m), schema (82 columns for 1m), feature groups (temporal, Fourier, business, load history, time-normalized windows, baseline/regime context), NaN handling strategy, and generation command.
 - Add Gold layer section: describe what gold adds beyond silver, schema, validation rules, and generation command.
 - Add a schema table for each layer listing column name, dtype, and valid range/values.
 
@@ -731,7 +736,7 @@ Tasks:
 
 `notebooks/002_silver_eda.ipynb` (currently 8 cells -- NaN count, time-series plot, 3 workday bar charts, daily bar chart):
 - Add cell: import from `config.py` instead of assuming paths.
-- Add cell: feature correlation heatmap -- show pairwise correlation of all 44 columns. Identify highly correlated pairs (|r| > 0.95) that may cause multicollinearity.
+- Add cell: feature correlation heatmap -- show pairwise correlation of the modeled predictor surface. Identify highly correlated pairs (|r| > 0.95) that may cause multicollinearity.
 - Add cell: NaN cascade analysis -- for each feature column, count NaN rows and explain why (lag warm-up, rolling warm-up, slope warm-up). Create table: column name, NaN count, NaN percentage, reason.
 - Add cell: feature distributions -- histogram grid for all non-lag numeric features (avg_load, temporal features, workday).
 - Add cell: load autocorrelation plot -- ACF/PACF of `avg_load` at 1-minute resolution to show temporal dependency structure.
@@ -782,14 +787,16 @@ Acceptance criteria:
 
 ### Step 2. Formalize feature set definitions
 
-Rationale: The silver/gold pipeline produces 44 columns, but there is no documented definition of which features should be used for modeling. `docs/002_pipeline/plan.md` lines 167-191 sketch feature sets A/B/C but uses column names that do not match the actual pipeline output. Without explicit feature set definitions, teammates will use ad hoc column selections, making experiment comparison impossible.
+Rationale: The silver/gold pipeline now produces 82 columns, and the predictor surface spans both legacy period-based and time-normalized/regime-aware features. Without explicit feature set definitions, teammates will use ad hoc column selections, making experiment comparison impossible.
 
 Tasks:
-- Create `docs/003_modeling/feature_sets.md` defining at least three named feature sets:
-  - Minimal: `avg_load` + `workday` + `hour` + `lag_1m` (smallest set to establish baseline).
-  - Temporal: all temporal features (`year`, `quarter`, `month`, `day`, `weekday`, `hour`, `season`, `time_of_day`) + `workday` + `avg_load`.
-  - Full: all 44 columns minus `timestamp` and `day_class` (the kitchen sink for comparison).
+- Create `docs/003_modeling/feature_sets.md` defining the implemented named feature sets:
+  - Minimal: `workday`, `hour`, `lag_1`.
+  - Temporal: calendar and cyclical features plus `workday` and `lag_1`.
+  - Full: all 82 columns minus `timestamp`, `day_class`, and `avg_load` (79 predictors).
   - Curated: a reduced set removing highly correlated features identified in EDA Step 1.
+  - Full Stable: `full` minus the longest unstable rolling windows.
+  - Regime Profile: calendar + short-memory + baseline-relative regime features.
 - For each feature set:
   - List exact column names matching the silver/gold output.
   - State the rationale: why include these features, what hypothesis does it test.

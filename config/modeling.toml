@@ -1,0 +1,182 @@
+# Shared modeling runtime configuration.
+# Purpose: centralize execution controls for Stage-5 and Stage-6 model evaluation.
+# Last reviewed: 2026-03-06
+
+[parallel]
+enabled = true
+# Default backend is threading because Stage-5/Stage-6 reuse already-loaded pandas
+# frames heavily; this avoids Windows process-spawn overhead and repeated copies.
+backend = "threading"
+max_workers = 4
+batch_size = 1
+pre_dispatch = "2*n_jobs"
+min_tasks = 2
+inner_threads_per_worker = 1
+
+[parallel.performance]
+enabled = true
+max_workers = 10
+inner_threads_per_worker = 4
+high_capacity_host_only = true
+
+[parallel.multires]
+enabled = true
+max_workers = 4
+inner_threads_per_worker = 1
+high_capacity_host_only = false
+
+[parallel.rollout_sweep]
+enabled = true
+max_workers = 6
+inner_threads_per_worker = 1
+high_capacity_host_only = true
+
+[parallel.forecast_control]
+enabled = true
+max_workers = 6
+inner_threads_per_worker = 1
+high_capacity_host_only = true
+
+[performance.ramp]
+quantile = 0.85
+
+[performance.blend_search]
+enabled = true
+base_window = 120
+base_sharpness = 6.0
+min_weight = 0.10
+max_weight = 0.90
+window_multipliers = [0.5, 1.0, 2.0]
+sharpness_multipliers = [0.5, 1.0, 1.5]
+bucket_enabled = true
+bucket_size_minutes = 5
+bucket_cycle_minutes = 15
+bucket_candidate_weights = [0.0, 0.02, 0.04, 0.06, 0.08, 0.10, 0.12, 0.15, 0.20, 0.30, 0.40, 0.60, 0.80, 1.0]
+
+[performance.hgb_search]
+enabled = true
+screen_folds = 2
+min_candidates = 3
+max_candidates = 6
+learning_rates = [0.03, 0.05, 0.10]
+max_depths = [3, 5, 7]
+min_samples_leaf = [20, 100]
+l2_regularization = [0.0, 0.1]
+max_iters = [300]
+
+[performance.quick_profiles.short]
+feature_sets = ["minimal_phase_anchor", "full_stable", "full_stable_legacy", "curated_ramp", "minimal_phase"]
+model_labels = [
+    "hgb-balanced",
+    "hgb-frontier-lr010-l2001",
+    "hgb-frontier-lr010-leaf100",
+    "xgb-balanced",
+    "xgb-frontier-lr010",
+]
+n_folds = 2
+val_window_days = 2
+
+[performance.quick_profiles.hourly]
+feature_sets = ["minimal", "curated", "full_stable"]
+model_labels = [
+    "hgb-balanced",
+    "hgb-frontier-lr010-l2001",
+    "hgb-frontier-lr010-leaf100",
+    "xgb-balanced",
+    "xgb-frontier-lr010",
+]
+n_folds = 2
+val_window_days = 2
+
+[performance.quick_profiles.day_ahead]
+feature_sets = ["minimal", "full_stable", "regime_profile"]
+model_labels = [
+    "hgb-balanced",
+    "hgb-frontier-lr010-l2001",
+    "hgb-frontier-lr010-leaf100",
+    "xgb-balanced",
+    "xgb-frontier-depth8",
+]
+n_folds = 2
+val_window_days = 2
+
+[performance.quick_profiles.expanded]
+feature_sets = ["minimal_phase_anchor", "full_stable", "full_stable_legacy", "curated_ramp"]
+model_labels = [
+    "hgb-balanced",
+    "hgb-frontier-lr010-l2001",
+    "hgb-frontier-lr010-leaf100",
+    "xgb-balanced",
+    "xgb-frontier-lr010",
+]
+n_folds = 12
+val_window_days = 1
+
+[performance.horizon_policies.short]
+max_horizon_minutes = 15
+feature_sets = ["minimal", "minimal_phase", "minimal_phase_anchor", "curated", "curated_ramp", "full_stable", "full_stable_legacy", "regime_profile"]
+model_labels = [
+    "ridge-strong",
+    "hgb-balanced",
+    "hgb-frontier-lr010-l2001",
+    "hgb-frontier-lr010-leaf100",
+    "xgb-balanced",
+    "xgb-frontier-lr010",
+]
+allow_residual = true
+allow_blend = true
+rollout_residual_baseline = "persistence"
+rollout_residual_candidates = ["persistence", "anchored_workday", "avg_workday"]
+rollout_origin_policy = "phase_balanced"
+rollout_selection_target = "next_lock_mae"
+
+[performance.horizon_policies.hourly]
+max_horizon_minutes = 120
+feature_sets = ["minimal", "curated", "full_stable", "regime_profile"]
+model_labels = [
+    "ridge-strong",
+    "hgb-balanced",
+    "hgb-frontier-lr010-l2001",
+    "hgb-frontier-lr010-leaf100",
+    "xgb-balanced",
+    "xgb-frontier-lr010",
+]
+allow_residual = true
+allow_blend = false
+rollout_residual_baseline = "avg_workday"
+rollout_residual_candidates = ["avg_workday"]
+rollout_origin_policy = "phase_balanced"
+rollout_selection_target = "next_lock_mae"
+
+[performance.horizon_policies.day_ahead]
+max_horizon_minutes = 1440
+feature_sets = ["minimal", "regime_profile", "full_stable"]
+model_labels = [
+    "hgb-balanced",
+    "hgb-frontier-lr010-l2001",
+    "hgb-frontier-lr010-leaf100",
+    "xgb-balanced",
+    "xgb-frontier-depth8",
+]
+allow_residual = true
+allow_blend = false
+rollout_residual_baseline = "avg_workday"
+rollout_residual_candidates = ["avg_workday", "anchored_workday", "hybrid_workday"]
+rollout_origin_policy = "uniform"
+rollout_selection_target = "profile_shape_mae"
+
+[performance.evaluation]
+segment_columns = ["day_class", "profile_active_flag", "workday_transition"]
+classical_benchmarks = ["holt_damped", "arima"]
+supplemental_surface_splits = ["validate", "test"]
+supplemental_load_band_quantile = 0.90
+supplemental_ramp_band_quantile = 0.90
+bootstrap_samples = 400
+bootstrap_confidence_level = 0.95
+bootstrap_min_block_minutes = 15
+bootstrap_max_block_minutes = 360
+bootstrap_consecutive_insignificant = 5
+compute_shap = false
+importance_repeats = 20
+importance_max_features = 15
+importance_random_state = 42

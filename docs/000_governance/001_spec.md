@@ -4,16 +4,16 @@
 |------------------|--------------------------------------------------------------|
 | Project          | Daily Electric Load Forecasting                              |
 | Specification ID | SPEC-01                                                      |
-| Status           | Implemented (validated 2026-02-20)                           |
+| Status           | Implemented (validated 2026-03-09)                           |
 | Created          | 2026-02-20                                                   |
-| Last Updated     | 2026-02-20                                                   |
+| Last Updated     | 2026-03-09                                                   |
 | Authors          | Spencer Hoyle, Sean He, Frank Chavezsosa                     |
 | Advisor          | Prof. Raymond de Callafon                                    |
 | Depends on       | SPEC-00 (completed)                                          |
 
 ## Implementation status
 
-As of 2026-02-20, all phases in this specification have been implemented and
+As of 2026-03-09, all phases in this specification have been implemented and
 validated, including a final verification refresh after notebook/runtime hardening.
 
 Validation snapshot:
@@ -25,6 +25,9 @@ Validation snapshot:
 - Notebook/static-analysis hardening was revalidated:
   - `scripts/validate_notebooks.py` now executes nbconvert with a Windows selector
     event loop policy to avoid the prior `zmq` runtime warning.
+  - executed notebooks are archived under `outputs/008_notebook_runs/<run_id>/`
+    before tracked outputs are cleared, preserving audit evidence without dirtying
+    the repository notebooks.
   - `notebooks/000_raw_eda.ipynb` QQ-plot scalar conversion was tightened to satisfy
     Pylance `reportArgumentType` diagnostics.
 
@@ -39,6 +42,11 @@ details in code or documentation, this file and the matching entries in the spec
 changelog at [docs/change logs/001spec/changelog.md](../change%20logs/001spec/changelog.md)
 take precedence. The root [changelog.md](../../changelog.md) serves as an index pointing
 to spec-specific changelogs.
+
+Current operating-direction note:
+- SPEC-01 remains the notebook and configuration source of truth.
+- The active optimizer-facing modeling direction now lives in
+  [002_operating_direction_spec.md](002_operating_direction_spec.md).
 
 ## Why this specification exists
 
@@ -110,52 +118,49 @@ invests in additional notebooks.
 
 ## Platform compatibility
 
-This project runs on **ARM64 (Apple Silicon)** and **macOS**. All libraries used in
-notebooks must have pre-built wheels or pure-Python fallbacks for both architectures. If a
-library does not have ARM64 macOS support, the implementer must flag it to the team before
-proceeding -- do not silently substitute or skip.
+The repo must remain runnable on both **x64/AMD64** and **ARM64** hosts. The default
+contract is the CPU-safe path: setup, notebooks, tests, and the pipeline must all work
+without optional acceleration extras. Accelerated execution on stronger x64 hosts is a
+performance enhancement, not a correctness requirement.
+
+Current operating expectations:
+
+- Base path: Windows, macOS, or Linux on x64/AMD64 or ARM64 using the default dependency set.
+- Optional accelerated path: compatible x64/AMD64 hosts may install the acceleration
+  extra to enable GPU-backed XGBoost and broader candidate benchmarking where the repo
+  has explicit runtime probes and fallbacks.
+- Team safety rule: teammate machines without GPU support, without the acceleration
+  extra, or on ARM64 must still execute the supported repo commands successfully on CPU.
 
 ### Library compatibility audit
 
-The following table documents ARM64 macOS wheel availability for every library used or
-proposed by this specification. Status is based on the latest available releases as of
-the specification date. If a library has since added ARM64 support that is not reflected
-here, the implementer should verify and update this table.
+The following table documents the compatibility contract that matters now:
 
-| Library | Used for | ARM64 macOS wheels | Notes |
-|---------|----------|-------------------|-------|
-| `numpy` >=1.24 | Array operations | Yes (native since 1.21) | No issues expected |
-| `pandas` >=2.0 | DataFrames | Yes (native since 1.4) | No issues expected |
-| `scipy` >=1.11 | PSD, QQ plots, statistics | Yes (native since 1.9) | No issues expected |
-| `matplotlib` >=3.7 | Static plots | Yes (native since 3.5) | No issues expected |
-| `seaborn` >=0.12 | Statistical plots | Yes (pure Python) | No issues expected |
-| `plotly` >=5.15 | Interactive charts | Yes (pure Python + JS) | No issues expected |
-| `scikit-learn` >=1.3 | Mutual information | Yes (native since 1.1) | No issues expected |
-| `statsmodels` >=0.14 | STL, VIF, PACF, ADF | Yes (native since 0.14) | Verify wheel exists for exact version |
-| `pyarrow` >=14.0 (non-ARM64) + `fastparquet` >=2025.12 | Parquet I/O | Yes (platform-dependent wheels) | Use `fastparquet` fallback where `pyarrow` wheel is unavailable |
-| `tomllib` | TOML parsing | Yes (stdlib since 3.11) | No external dependency |
-| `jupyter` >=1.0 | Notebook execution | Yes | No issues expected |
-| `pytest` >=7.0 | Testing | Yes (pure Python) | No issues expected |
-
-**`statsmodels`** is the only new runtime dependency introduced by this spec (for STL
-decomposition, VIF, PACF, and ADF tests). It must be declared in `pyproject.toml`
-with a version that has confirmed ARM64 macOS wheels. As of this writing,
-`statsmodels>=0.14,<1.0` is recommended.
+| Dependency group | Used for | Base CPU-safe on x64/AMD64 + ARM64 | Optional acceleration notes |
+|------------------|----------|------------------------------------|-----------------------------|
+| `numpy`, `pandas`, `scipy` | arrays, dataframes, statistics | Required | Must stay on versions with mainstream wheels on both architectures |
+| `matplotlib`, `seaborn`, `plotly`, `jupyter` | notebooks and visualization | Required | No GPU dependency allowed for notebook correctness |
+| `scikit-learn` | core learned models and utilities | Required | CPU-safe path is canonical for team-wide portability |
+| `statsmodels` | classical benchmarks and time-series diagnostics | Required | Must keep working on CPU-safe hosts; warnings should be handled in code rather than by hiding failures |
+| `pyarrow` / `fastparquet` | parquet I/O | Required | Use the documented parquet fallback when one wheel is unavailable on a teammate platform |
+| `pytest` | validation | Required | Test commands must stay green without optional acceleration |
+| `xgboost` (optional extra) | optional learned GPU-capable candidates | Optional | Must remain behind the acceleration extra plus runtime probes; CPU and ARM64 teammates must not depend on it for correctness |
 
 ### Compatibility escalation protocol
 
 If during implementation any library:
-- Does not install cleanly on ARM64 macOS, or
-- Requires building from source with no pre-built wheel, or
-- Has a known incompatibility with the project's Python version (3.11+),
+- Does not install cleanly on the repo's base CPU-safe path, especially on ARM64 teammate machines, or
+- Requires building from source with no practical wheel path for the supported Python version, or
+- Forces the repo to choose between x64 acceleration and ARM64 correctness,
 
 the implementer must:
 1. Stop and notify the team with the library name, version, and error message.
-2. Propose alternatives (different library, different approach, local build).
-3. Wait for team decision before proceeding.
+2. Propose alternatives (different library, optional extra, runtime probe, or CPU-safe fallback).
+3. Wait for team decision before proceeding when the tradeoff would affect shared setup or reproducibility.
 
 Do not silently work around compatibility issues by downgrading, patching, or skipping
-analyses.
+analyses. Optional acceleration is allowed only when the repo still behaves correctly
+without it.
 
 ## Design principles
 

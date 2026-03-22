@@ -19,7 +19,8 @@ stage.
 
 | Field | Value |
 |-------|-------|
-| Script | `scripts/002_silver_to_gold.py` |
+| Entry script | `scripts/002_silver_to_gold.py` |
+| Canonical implementation | `scripts/stages/silver_to_gold.py` |
 | Entry function | `silver_to_gold(silver_dir=None, gold_dir=None, resolutions=None)` |
 | Config source | `scripts/config.py` (`PATHS`, `SCHEMAS`, `DEFAULT_RESOLUTIONS`, resolution mappings) |
 
@@ -41,7 +42,7 @@ Output files for default resolutions:
 
 ## Schema
 
-Gold uses the same 44-column schema as silver. No columns are added or removed.
+Gold uses the same 82-column schema as silver. No columns are added or removed.
 The difference is in data completeness: rows with null values in required core columns
 are dropped.
 
@@ -50,7 +51,7 @@ See [../003_silver/silver.md](../003_silver/silver.md) for the full column listi
 ## Gold Definition
 
 Gold is defined as:
-- Same schema as silver (44 columns, same dtypes).
+- Same schema as silver (82 columns, same dtypes).
 - Rows where any required core modeling column is null are dropped.
 - Deterministic sort by `timestamp` is preserved.
 - No additional features or transformations are applied.
@@ -70,6 +71,10 @@ Required non-null columns for gold (from `SCHEMAS["gold"]["required_not_null"]`)
 | `hour` | Temporal predictor |
 | `season` | Temporal predictor |
 | `time_of_day` | Temporal predictor |
+| `hour_sin` | Daily cyclical predictor |
+| `hour_cos` | Daily cyclical predictor |
+| `dow_sin` | Weekly cyclical predictor |
+| `dow_cos` | Weekly cyclical predictor |
 | `avg_load` | Modeling target -- cannot train/evaluate without it |
 
 Lag, rolling, delta, and slope columns are allowed to contain NaN in gold. These

@@ -2,8 +2,9 @@
 
 The silver layer resamples the second-level bronze time series to configurable temporal
 resolutions and engineers the full set of modeling features. This is where raw load data
-becomes analytically useful: temporal context, business classification, lagged values,
-rolling statistics, deltas, and slopes are all computed here.
+becomes analytically useful: temporal context, business classification, continuous
+cyclical encodings, lagged values, rolling statistics, deltas, and slopes are all
+computed here.
 
 ## Related Documents
 
@@ -20,10 +21,11 @@ rolling statistics, deltas, and slopes are all computed here.
 
 | Field | Value |
 |-------|-------|
-| Script | `scripts/001_bronze_to_silver.py` |
+| Entry script | `scripts/001_bronze_to_silver.py` |
+| Canonical implementation | `scripts/stages/bronze_to_silver.py` |
 | Entry function | `bronze_to_silver(bronze_path=None, silver_dir=None, resolutions=None)` |
 | Config source | `scripts/config.py` (`PATHS`, `SCHEMAS`, `FEATURE_CONFIG`, `DAY_CLASS_MAP`, resolutions) |
-| Utility source | `scripts/utils.py` (`month_to_season`, `hour_to_time_of_day`, `rolling_slope_series`) |
+| Utility source | `scripts/utils.py` (`month_to_season`, `hour_to_time_of_day`, `build_fourier_feature_frame`, `rolling_slope_series`) |
 
 ## Input and Output
 
@@ -44,7 +46,7 @@ Output files for default resolutions:
 Additional supported resolutions (`1s`, `5s`, `10s`, `30s`) produce outputs when
 explicitly requested via the orchestrator or function parameter.
 
-## Schema (44 Columns)
+## Schema (48 Columns)
 
 ### Core Columns
 
@@ -72,6 +74,19 @@ explicitly requested via the orchestrator or function parameter.
 | `hour` | `int` | No | Hour of day (0-23) |
 | `season` | `int` | No | Season: 1=Winter (Dec-Feb), 2=Spring (Mar-May), 3=Summer (Jun-Aug), 4=Fall (Sep-Nov) |
 | `time_of_day` | `int` | No | Time bucket: 0=morning (6-11), 1=afternoon (12-16), 2=evening (17-21), 3=night (22-5) |
+
+### Fourier Features
+
+Fourier features encode cyclical time variables on the unit circle so tree-based
+models can learn smooth daily and weekly structure without treating midnight or
+week boundaries as hard discontinuities.
+
+| Column | Dtype | Nullable | Description |
+|--------|-------|----------|-------------|
+| `hour_sin` | `float64` | No | `sin(2*pi*hour_phase/24)` where `hour_phase` includes minute and second fractions |
+| `hour_cos` | `float64` | No | `cos(2*pi*hour_phase/24)` where `hour_phase` includes minute and second fractions |
+| `dow_sin` | `float64` | No | `sin(2*pi*dow_phase/7)` where `dow_phase` includes the within-day fraction |
+| `dow_cos` | `float64` | No | `cos(2*pi*dow_phase/7)` where `dow_phase` includes the within-day fraction |
 
 ### Lag Features
 
@@ -141,10 +156,11 @@ For each configured resolution, the script performs:
    a. Business: map `day_class` to `workday` via `DAY_CLASS_MAP`.
    b. Temporal: extract from timestamp index (`year`, `quarter`, `month`, `day`,
       `day_of_week`, `hour`, `season`, `time_of_day`).
-   c. Lag: shift `avg_load` by each configured lag period.
-   d. Rolling: compute mean/std/max/min over each configured window.
-   e. Delta: subtract `lag_1` from each longer lag.
-   f. Slope: compute vectorized rolling slope and shift by 1.
+   c. Fourier: compute continuous daily and weekly sin/cos pairs from timestamp phase.
+   d. Lag: shift `avg_load` by each configured lag period.
+   e. Rolling: compute mean/std/max/min over each configured window.
+   f. Delta: subtract `lag_1` from each longer lag.
+   g. Slope: compute vectorized rolling slope and shift by 1.
 7. Reset index to make `timestamp` a column.
 8. Reorder columns to match `SCHEMAS["silver"]["columns"]`.
 9. Validate schema and non-lag null safety.
@@ -161,7 +177,7 @@ For each configured resolution, the script performs:
 | Lag warm-up | Expected NaN in first N rows of each lag column. |
 | Rolling warm-up | Expected NaN in first `window - 1` rows of each rolling column. |
 | Slope warm-up + shift | Expected NaN in first `window` rows of each slope column. |
-| Non-lag core columns (`timestamp`, `day_class`, temporal features) | Validated as non-null. Raises `ValueError` if any nulls found. |
+| Non-lag core columns (`timestamp`, `day_class`, temporal + Fourier features) | Validated as non-null. Raises `ValueError` if any nulls found. |
 
 ## Performance
 

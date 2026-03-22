@@ -16,6 +16,12 @@ def _args(
     resolution: str | None = None,
     include_performance: bool = False,
     performance_mode: str = "quick",
+    include_multires: bool = False,
+    multires_mode: str = "smoke",
+    include_rollout: bool = False,
+    include_rollout_sweep: bool = False,
+    include_horizon_curve: bool = False,
+    include_forecast_control: bool = False,
 ) -> argparse.Namespace:
     """Create argparse namespace values for pipeline test invocations."""
     return argparse.Namespace(
@@ -25,6 +31,12 @@ def _args(
         dry_run=dry_run,
         include_performance=include_performance,
         performance_mode=performance_mode,
+        include_multires=include_multires,
+        multires_mode=multires_mode,
+        include_rollout=include_rollout,
+        include_rollout_sweep=include_rollout_sweep,
+        include_horizon_curve=include_horizon_curve,
+        include_forecast_control=include_forecast_control,
     )
 
 
@@ -92,6 +104,20 @@ def test_run_pipeline_stage_gold_only(pipeline_module, monkeypatch):
     assert pipeline_module.main() == 0
 
 
+def test_run_pipeline_stage_modeling_only(pipeline_module, monkeypatch):
+    """Ensure modeling-only mode dispatches to the modeling stage runner."""
+    calls: list[str] = []
+    monkeypatch.setattr(pipeline_module, "parse_args", lambda: _args(stage="modeling"))
+    monkeypatch.setattr(pipeline_module, "validate_config", lambda: None)
+    monkeypatch.setattr(
+        pipeline_module,
+        "_run_modeling_stage",
+        lambda: calls.append("modeling") or [],
+    )
+    assert pipeline_module.main() == 0
+    assert calls == ["modeling"]
+
+
 def test_run_pipeline_dry_run_performance_uses_project_scoped_manifest(
     pipeline_module, tmp_path, monkeypatch
 ):
@@ -123,6 +149,78 @@ def test_run_pipeline_stage_performance_only(pipeline_module, monkeypatch):
     assert calls == [(None, "quick")]
 
 
+def test_run_performance_stage_reports_latest_manifest_path(pipeline_module, monkeypatch):
+    """Ensure Stage-5 returns the latest-alias manifest path rather than a flat root file."""
+    monkeypatch.setattr(pipeline_module, "_ensure_step4_modeling_artifacts", lambda: [])
+    monkeypatch.setattr(pipeline_module.subprocess, "run", lambda *args, **kwargs: None)
+
+    outputs = pipeline_module._run_performance_stage(None, performance_mode="quick")
+
+    assert outputs == [
+        pipeline_module._project_scoped_path(
+            pipeline_module.scoped_output_path(pipeline_module.PATHS["outputs_performance_dir"])
+        )
+        / "latest"
+        / "run_manifest.json"
+    ]
+
+
+def test_run_pipeline_stage_multires_only(pipeline_module, monkeypatch):
+    """Ensure multires-only mode dispatches to multires stage runner."""
+    calls: list[tuple[list[str] | None, str]] = []
+    monkeypatch.setattr(pipeline_module, "parse_args", lambda: _args(stage="multires"))
+    monkeypatch.setattr(pipeline_module, "validate_config", lambda: None)
+    monkeypatch.setattr(
+        pipeline_module,
+        "_run_multires_stage",
+        lambda resolutions, multires_mode: calls.append((resolutions, multires_mode)) or [],
+    )
+    assert pipeline_module.main() == 0
+    assert calls == [(None, "smoke")]
+
+
+def test_run_pipeline_stage_rollout_only(pipeline_module, monkeypatch):
+    """Ensure rollout-only mode dispatches to rollout stage runner."""
+    calls: list[list[str] | None] = []
+    monkeypatch.setattr(pipeline_module, "parse_args", lambda: _args(stage="rollout"))
+    monkeypatch.setattr(pipeline_module, "validate_config", lambda: None)
+    monkeypatch.setattr(
+        pipeline_module,
+        "_run_rollout_stage",
+        lambda resolutions: calls.append(resolutions) or [],
+    )
+    assert pipeline_module.main() == 0
+    assert calls == [None]
+
+
+def test_run_pipeline_stage_rollout_sweep_only(pipeline_module, monkeypatch):
+    """Ensure rollout-sweep-only mode dispatches to the challenger sweep runner."""
+    calls: list[str] = []
+    monkeypatch.setattr(pipeline_module, "parse_args", lambda: _args(stage="rollout_sweep"))
+    monkeypatch.setattr(pipeline_module, "validate_config", lambda: None)
+    monkeypatch.setattr(
+        pipeline_module,
+        "_run_rollout_sweep_stage",
+        lambda: calls.append("rollout_sweep") or [],
+    )
+    assert pipeline_module.main() == 0
+    assert calls == ["rollout_sweep"]
+
+
+def test_run_pipeline_stage_horizon_curve_only(pipeline_module, monkeypatch):
+    """Ensure horizon-curve-only mode dispatches to the horizon-curve stage runner."""
+    calls: list[str] = []
+    monkeypatch.setattr(pipeline_module, "parse_args", lambda: _args(stage="horizon_curve"))
+    monkeypatch.setattr(pipeline_module, "validate_config", lambda: None)
+    monkeypatch.setattr(
+        pipeline_module,
+        "_run_horizon_curve_stage",
+        lambda: calls.append("horizon_curve") or [],
+    )
+    assert pipeline_module.main() == 0
+    assert calls == ["horizon_curve"]
+
+
 def test_run_pipeline_stage_all_can_include_performance(pipeline_module, monkeypatch):
     """Ensure --include-performance adds the performance stage after gold."""
     calls: list[tuple[str, list[str] | None]] = []
@@ -146,6 +244,179 @@ def test_run_pipeline_stage_all_can_include_performance(pipeline_module, monkeyp
     assert pipeline_module.main() == 0
     assert calls == [("bronze", None), ("silver", None), ("gold", None)]
     assert perf_calls == [(None, "preflight")]
+
+
+def test_run_pipeline_stage_all_can_include_multires_and_rollout(pipeline_module, monkeypatch):
+    """Ensure multires and rollout are appended in correct order when requested."""
+    calls: list[tuple[str, list[str] | None]] = []
+    multires_calls: list[tuple[list[str] | None, str]] = []
+    rollout_calls: list[list[str] | None] = []
+    monkeypatch.setattr(
+        pipeline_module,
+        "parse_args",
+        lambda: _args(
+            stage="all",
+            include_multires=True,
+            multires_mode="candidate",
+            include_rollout=True,
+        ),
+    )
+    monkeypatch.setattr(pipeline_module, "validate_config", lambda: None)
+    monkeypatch.setattr(
+        pipeline_module,
+        "_run_stage",
+        lambda stage, resolutions: calls.append((stage, resolutions)) or [],
+    )
+    monkeypatch.setattr(
+        pipeline_module,
+        "_run_multires_stage",
+        lambda resolutions, multires_mode: multires_calls.append((resolutions, multires_mode)) or [],
+    )
+    monkeypatch.setattr(
+        pipeline_module,
+        "_run_rollout_stage",
+        lambda resolutions: rollout_calls.append(resolutions) or [],
+    )
+    assert pipeline_module.main() == 0
+    expected_resolutions = pipeline_module._merge_resolutions(
+        list(pipeline_module.DEFAULT_RESOLUTIONS),
+        list(pipeline_module.MULTIRES_PROFILES["candidate"]["resolutions"]),
+        [pipeline_module.MULTIRES_ROLLOUT["selected_resolution"]],
+    )
+    assert calls == [("bronze", None), ("silver", expected_resolutions), ("gold", expected_resolutions)]
+    assert multires_calls == [(None, "candidate")]
+    assert rollout_calls == [None]
+
+
+def test_run_pipeline_stage_all_can_include_rollout_sweep(pipeline_module, monkeypatch):
+    """Ensure rollout sweep is appended after multires when requested."""
+    calls: list[tuple[str, list[str] | None]] = []
+    multires_calls: list[tuple[list[str] | None, str]] = []
+    sweep_calls: list[str] = []
+    monkeypatch.setattr(
+        pipeline_module,
+        "parse_args",
+        lambda: _args(
+            stage="all",
+            include_multires=True,
+            multires_mode="candidate",
+            include_rollout_sweep=True,
+        ),
+    )
+    monkeypatch.setattr(pipeline_module, "validate_config", lambda: None)
+    monkeypatch.setattr(
+        pipeline_module,
+        "_run_stage",
+        lambda stage, resolutions: calls.append((stage, resolutions)) or [],
+    )
+    monkeypatch.setattr(
+        pipeline_module,
+        "_run_multires_stage",
+        lambda resolutions, multires_mode: multires_calls.append((resolutions, multires_mode)) or [],
+    )
+    monkeypatch.setattr(
+        pipeline_module,
+        "_run_rollout_sweep_stage",
+        lambda: sweep_calls.append("rollout_sweep") or [],
+    )
+    assert pipeline_module.main() == 0
+    expected_resolutions = pipeline_module._merge_resolutions(
+        list(pipeline_module.DEFAULT_RESOLUTIONS),
+        list(pipeline_module.MULTIRES_PROFILES["candidate"]["resolutions"]),
+    )
+    assert calls == [("bronze", None), ("silver", expected_resolutions), ("gold", expected_resolutions)]
+    assert multires_calls == [(None, "candidate")]
+    assert sweep_calls == ["rollout_sweep"]
+
+
+def test_run_pipeline_stage_all_can_include_horizon_curve(pipeline_module, monkeypatch):
+    """Ensure horizon-curve runs after Stage-6 when explicitly requested."""
+    calls: list[tuple[str, list[str] | None]] = []
+    multires_calls: list[tuple[list[str] | None, str]] = []
+    horizon_calls: list[str] = []
+    monkeypatch.setattr(
+        pipeline_module,
+        "parse_args",
+        lambda: _args(
+            stage="all",
+            include_horizon_curve=True,
+            multires_mode="candidate",
+        ),
+    )
+    monkeypatch.setattr(pipeline_module, "validate_config", lambda: None)
+    monkeypatch.setattr(
+        pipeline_module,
+        "_run_stage",
+        lambda stage, resolutions: calls.append((stage, resolutions)) or [],
+    )
+    monkeypatch.setattr(
+        pipeline_module,
+        "_run_multires_stage",
+        lambda resolutions, multires_mode: multires_calls.append((resolutions, multires_mode)) or [],
+    )
+    monkeypatch.setattr(
+        pipeline_module,
+        "_run_horizon_curve_stage",
+        lambda: horizon_calls.append("horizon_curve") or [],
+    )
+
+    assert pipeline_module.main() == 0
+
+    expected_resolutions = pipeline_module._merge_resolutions(
+        list(pipeline_module.DEFAULT_RESOLUTIONS),
+        list(pipeline_module.MULTIRES_PROFILES["candidate"]["resolutions"]),
+        [pipeline_module.MULTIRES_ROLLOUT["selected_resolution"]],
+    )
+    assert calls == [("bronze", None), ("silver", expected_resolutions), ("gold", expected_resolutions)]
+    assert multires_calls == [(None, "candidate")]
+    assert horizon_calls == ["horizon_curve"]
+
+
+def test_run_pipeline_stage_all_can_include_forecast_control(pipeline_module, monkeypatch):
+    """Ensure forecast-control runs after the rollout stack when explicitly requested."""
+    calls: list[tuple[str, list[str] | None]] = []
+    multires_calls: list[tuple[list[str] | None, str]] = []
+    forecast_calls: list[str] = []
+    monkeypatch.setattr(
+        pipeline_module,
+        "parse_args",
+        lambda: _args(
+            stage="all",
+            include_multires=True,
+            multires_mode="candidate",
+            include_forecast_control=True,
+        ),
+    )
+    monkeypatch.setattr(pipeline_module, "validate_config", lambda: None)
+    monkeypatch.setattr(
+        pipeline_module,
+        "_run_stage",
+        lambda stage, resolutions: calls.append((stage, resolutions)) or [],
+    )
+    monkeypatch.setattr(
+        pipeline_module,
+        "_run_multires_stage",
+        lambda resolutions, multires_mode: multires_calls.append((resolutions, multires_mode)) or [],
+    )
+    monkeypatch.setattr(
+        pipeline_module,
+        "_run_forecast_control_stage",
+        lambda: forecast_calls.append("forecast_control") or [],
+    )
+
+    assert pipeline_module.main() == 0
+
+    expected_resolutions = pipeline_module._merge_resolutions(
+        list(pipeline_module.DEFAULT_RESOLUTIONS),
+        list(pipeline_module.MULTIRES_PROFILES["candidate"]["resolutions"]),
+        [
+            pipeline_module.MULTIRES_ROLLOUT["selected_resolution"],
+            pipeline_module.MULTIRES_FORECAST_CONTROL["actual_resolution"],
+        ],
+    )
+    assert calls == [("bronze", None), ("silver", expected_resolutions), ("gold", expected_resolutions)]
+    assert multires_calls == [(None, "candidate")]
+    assert forecast_calls == ["forecast_control"]
 
 
 def test_run_pipeline_logs_pipeline_health_summary(pipeline_module, monkeypatch, capsys):

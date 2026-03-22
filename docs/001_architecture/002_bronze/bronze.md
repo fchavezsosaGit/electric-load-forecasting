@@ -18,7 +18,8 @@ but not filtered, aggregated, or enriched. NaN values from the raw data are pres
 
 | Field | Value |
 |-------|-------|
-| Script | `scripts/000_raw_to_bronze.py` |
+| Entry script | `scripts/000_raw_to_bronze.py` |
+| Canonical implementation | `scripts/stages/raw_to_bronze.py` |
 | Entry function | `raw_to_bronze(raw_path=None, output_path=None)` |
 | Config source | `scripts/config.py` (`PATHS`, `SCHEMAS`, `VALID_DAY_CLASSES`) |
 

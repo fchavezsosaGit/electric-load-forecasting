@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 import math
 from statistics import NormalDist
-from typing import Any
+from typing import Any, Mapping, Sequence
 
 import numpy as np
 import pandas as pd
@@ -82,6 +82,48 @@ def hour_to_time_of_day(hour: int) -> int:
     return 3
 
 
+def build_fourier_feature_frame(
+    timestamps: pd.Series | pd.DatetimeIndex,
+    *,
+    cycles: Sequence[Mapping[str, object]],
+) -> pd.DataFrame:
+    """Build continuous Fourier sin/cos features for configured cyclical sources.
+
+    Supported sources:
+    - ``hour``: continuous hour-of-day phase, including minute/second fractions
+    - ``day_of_week``: continuous day-of-week phase, including time-of-day fraction
+    """
+    dt_index = pd.DatetimeIndex(pd.to_datetime(timestamps, errors="raise"))
+    seconds_since_midnight = (
+        dt_index.hour.astype(float) * 3600.0
+        + dt_index.minute.astype(float) * 60.0
+        + dt_index.second.astype(float)
+        + (dt_index.microsecond.astype(float) / 1_000_000.0)
+        + (dt_index.nanosecond.astype(float) / 1_000_000_000.0)
+    )
+    hour_phase = seconds_since_midnight / 3600.0
+    day_of_week_phase = ((dt_index.dayofweek + 1) % 7).astype(float) + (hour_phase / 24.0)
+    phase_lookup: dict[str, np.ndarray] = {
+        "hour": hour_phase,
+        "day_of_week": day_of_week_phase,
+    }
+
+    features: dict[str, np.ndarray] = {}
+    for cycle in cycles:
+        source = cycle["source"]
+        period = cycle["period"]
+        prefix = cycle["prefix"]
+        if not isinstance(source, str) or not isinstance(prefix, str) or not isinstance(period, int):
+            raise ValueError(f"Invalid Fourier cycle spec: {cycle!r}")
+        if source not in phase_lookup:
+            raise ValueError(f"Unsupported Fourier source '{source}'.")
+        radians = 2.0 * np.pi * phase_lookup[source] / float(period)
+        features[f"{prefix}_sin"] = np.sin(radians)
+        features[f"{prefix}_cos"] = np.cos(radians)
+
+    return pd.DataFrame(features, index=dt_index)
+
+
 def rolling_slope(values: np.ndarray) -> float:
     """Compute a least-squares slope over a 1D numeric array.
 
@@ -117,6 +159,12 @@ def rolling_slope_series(series: pd.Series, window: int) -> pd.Series:
 
     Returns a series aligned with `series` where the first `window - 1`
     observations are NaN. Any window containing NaN returns NaN.
+
+    The implementation is O(n) in memory and time with respect to the series
+    length. That matters for second-level feature generation where the
+    time-normalized windows can span thousands of points and a naive
+    ``sliding_window_view`` materialization would allocate impractically large
+    intermediate arrays.
     """
     if not isinstance(series, pd.Series):
         raise ValueError(f"rolling_slope_series expects a pandas Series, got {type(series).__name__}")
@@ -138,17 +186,27 @@ def rolling_slope_series(series: pd.Series, window: int) -> pd.Series:
         )
         return pd.Series(slopes, index=series.index, dtype=float)
 
-    windows = np.lib.stride_tricks.sliding_window_view(values, window_shape=window)
-    x = np.arange(window, dtype=float)
-    x_centered = x - x.mean()
-    denom = np.sum(x_centered * x_centered)
+    safe_values = np.where(np.isnan(values), 0.0, values)
+    valid_flags = (~np.isnan(values)).astype(np.int64)
+    positions = np.arange(values.shape[0], dtype=float)
+    starts = np.arange(values.shape[0] - window + 1, dtype=np.int64)
+    ends = starts + window
 
-    has_nan = np.isnan(windows).any(axis=1)
-    means = windows.mean(axis=1)
-    centered = windows - means[:, None]
-    numerators = centered @ x_centered
+    cumulative_values = np.concatenate(([0.0], np.cumsum(safe_values, dtype=float)))
+    cumulative_weighted_values = np.concatenate(
+        ([0.0], np.cumsum(safe_values * positions, dtype=float))
+    )
+    cumulative_valid = np.concatenate(([0], np.cumsum(valid_flags, dtype=np.int64)))
+
+    window_sums = cumulative_values[ends] - cumulative_values[starts]
+    window_weighted_sums = cumulative_weighted_values[ends] - cumulative_weighted_values[starts]
+    valid_counts = cumulative_valid[ends] - cumulative_valid[starts]
+
+    window_center = float(window - 1) / 2.0
+    denom = float(window * (window**2 - 1)) / 12.0
+    numerators = window_weighted_sums - ((starts.astype(float) + window_center) * window_sums)
     slopes_window = numerators / denom
-    slopes_window[has_nan] = np.nan
+    slopes_window[valid_counts < window] = np.nan
 
     slopes[window - 1 :] = slopes_window
     return pd.Series(slopes, index=series.index, dtype=float)

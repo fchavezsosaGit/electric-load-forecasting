@@ -8,6 +8,9 @@ logs_dir = "logs"
 outputs_modeling_dir = "outputs/004_modeling"
 outputs_performance_dir = "outputs/005_performance"
 
+[dataset]
+load_type = "commercial_facility"
+
 [raw_contract]
 seconds_per_day = 86400
 required_keys = ["P_data", "day_data", "day_class"]
@@ -33,6 +36,14 @@ defaults = ["1min", "5min", "10min", "15min"]
 lag_periods = [1, 5, 15, 60, 1440]
 rolling_periods = [5, 15, 60, 240, 1440]
 slope_periods = [5, 15, 60]
+lag_minutes = [1, 5, 15, 60, 240, 1440]
+rolling_minutes = [15, 60, 240, 1440]
+slope_minutes = [15, 60, 240]
+profile_activity_threshold = 0.35
+fourier_cycles = [
+    { source = "hour", period = 24, prefix = "hour" },
+    { source = "day_of_week", period = 7, prefix = "dow" },
+]
 
 [day_class]
 mapping = { none = 0, half = 1, full = 2 }
@@ -57,15 +68,53 @@ model_min_split_rows = 1
 [feature_sets.minimal]
 columns = ["workday", "hour", "lag_1"]
 
+[feature_sets.minimal_phase]
+columns = [
+    "workday", "hour", "lag_1",
+    "phase_minute_15m", "phase_progress_15m",
+    "phase_boundary_dist_15m", "phase_boundary_flag_15m",
+    "phase_sin_15m", "phase_cos_15m"
+]
+
+[feature_sets.minimal_phase_anchor]
+columns = [
+    "workday", "hour", "lag_1",
+    "phase_minute_15m", "phase_progress_15m",
+    "phase_boundary_dist_15m", "phase_boundary_flag_15m",
+    "phase_sin_15m", "phase_cos_15m",
+    "avg_workday_baseline", "anchored_workday_baseline",
+    "profile_residual_lag_1", "previous_day_residual",
+    "profile_activity_ratio", "profile_active_flag"
+]
+
 [feature_sets.temporal]
 columns = [
     "workday", "year", "quarter", "month", "day",
-    "day_of_week", "hour", "season", "time_of_day", "lag_1"
+    "day_of_week", "hour", "season", "time_of_day",
+    "hour_sin", "hour_cos", "dow_sin", "dow_cos",
+    "lag_1"
 ]
 
 [feature_sets.curated]
 columns = [
     "workday", "hour", "season", "time_of_day",
+    "hour_sin", "hour_cos", "dow_sin", "dow_cos",
     "lag_1", "lag_5", "lag_60", "lag_1440",
     "rolling_mean_15", "rolling_std_60", "slope_15"
+]
+
+[feature_sets.regime_profile]
+columns = [
+    "workday", "hour", "season", "time_of_day",
+    "hour_sin", "hour_cos", "dow_sin", "dow_cos",
+    "phase_minute_15m", "phase_progress_15m",
+    "phase_boundary_dist_15m", "phase_boundary_flag_15m",
+    "phase_sin_15m", "phase_cos_15m",
+    "lag_1", "lag_60", "previous_day_load",
+    "lag_min_15", "lag_min_60", "lag_min_240",
+    "rolling_mean_min_60", "rolling_std_min_240", "slope_min_60",
+    "avg_workday_baseline", "anchored_workday_baseline",
+    "profile_residual_lag_1", "previous_day_residual",
+    "prev_day_workday", "next_day_workday", "workday_transition",
+    "profile_activity_ratio", "profile_active_flag"
 ]

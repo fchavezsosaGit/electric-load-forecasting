@@ -1,0 +1,344 @@
+[paths]
+outputs_multires_dir = "outputs/006_multires"
+outputs_rollout_dir = "outputs/007_rollout"
+outputs_horizon_curve_dir = "outputs/009_horizon_curve"
+outputs_forecast_control_dir = "outputs/010_forecast_control"
+
+[multires]
+enabled = true
+mode = "smoke"
+comparison_mode = "matched_horizon"
+resolutions = ["1s", "5s", "10s", "30s", "1min", "5min", "10min", "15min"]
+horizons_minutes = [15, 30, 60, 120]
+matched_strategies = ["recursive", "direct_endpoint"]
+native_step_enabled = true
+write_latest = true
+
+[multires.profiles.smoke]
+n_folds = 2
+val_window_days = 2
+origins_per_fold = 4
+resolutions = ["30s", "1min"]
+horizons_minutes = [15, 60]
+feature_sets = ["minimal", "curated"]
+model_labels = ["ridge-medium", "hgb-balanced", "xgb-balanced"]
+
+[multires.profiles.candidate]
+n_folds = 4
+val_window_days = 2
+origins_per_fold = 12
+resolutions = ["10s", "30s", "1min", "5min", "10min", "15min"]
+horizons_minutes = [15, 30, 60, 120]
+feature_sets = ["minimal", "curated", "full_stable"]
+model_labels = [
+    "ridge-strong",
+    "hgb-balanced",
+    "hgb-frontier-lr010-l2001",
+    "hgb-frontier-lr010-leaf100",
+    "hgb-frontier-lr010-depth5-leaf100-l2001",
+    "xgb-balanced",
+    "xgb-frontier-lr010",
+]
+
+[multires.profiles.focus_60m]
+n_folds = 3
+val_window_days = 2
+origins_per_fold = 4
+resolutions = ["30s", "1min", "5min", "10min"]
+horizons_minutes = [60]
+feature_sets = ["minimal", "curated", "full_stable"]
+model_labels = [
+    "hgb-balanced",
+    "hgb-frontier-lr010-l2001",
+    "hgb-frontier-lr010-leaf100",
+    "xgb-balanced",
+]
+
+[multires.profiles.subminute_focus]
+n_folds = 3
+val_window_days = 2
+origins_per_fold = 8
+resolutions = ["30s", "1min"]
+horizons_minutes = [15, 60]
+feature_sets = ["minimal", "curated", "full_stable"]
+model_labels = [
+    "hgb-balanced",
+    "hgb-frontier-lr010-leaf100",
+    "xgb-balanced",
+]
+
+[multires.profiles.full]
+n_folds = 5
+val_window_days = 2
+origins_per_fold = 24
+resolutions = ["1s", "5s", "10s", "30s", "1min", "5min", "10min", "15min"]
+horizons_minutes = [15, 30, 60, 120]
+feature_sets = ["minimal", "curated", "full_stable"]
+model_labels = [
+    "ridge-strong",
+    "hgb-balanced",
+    "hgb-frontier-lr010-l2001",
+    "hgb-frontier-lr010-leaf100",
+    "hgb-frontier-lr010-depth5-leaf100-l2001",
+    "xgb-balanced",
+    "xgb-frontier-lr010",
+]
+
+[multires.selection]
+min_eval_coverage = 0.95
+max_fold_std_mae_ratio = 0.20
+min_practical_mae_gain_pct = 0.02
+min_practical_rmse_gain_pct = 0.05
+max_candidate_runtime_minutes = 30
+pareto_enabled = true
+
+[multires.baselines]
+include_persistence = true
+include_previous_day = true
+include_avg_workday = true
+include_anchored_workday = true
+include_hybrid_workday = true
+
+[multires.hybrid]
+persistence_weight_start = 1.0
+persistence_weight_end = 0.35
+curve = "linear"
+
+[multires.runtime]
+max_parallel_jobs = 4
+enable_cache = true
+cache_mode = "disposable"
+full_runtime_warning_minutes = 120
+smoke_origins_per_fold = 4
+candidate_origins_per_fold = 12
+full_origins_per_fold = 24
+
+[multires.rollout]
+enabled = true
+selected_resolution = "10min"
+feature_set = "minimal"
+model_label = "hgb-balanced"
+horizon_minutes = 1440
+strategy = "recursive"
+origins_per_run = 8
+origin_policy = "auto"
+selection_target = "auto"
+
+[multires.rollout_challengers]
+enabled = true
+max_candidates = 8
+parallel_workers = 2
+include_rollout_registry = true
+include_stage6_registry = true
+include_horizon_policy_candidates = true
+include_config_default = true
+origin_policies = ["phase_balanced", "uniform", "billing_aligned", "midnight"]
+policy_resolutions = ["1min", "5min", "10min"]
+recommendation_origin_scope = "requested_only"
+
+[multires.rollout_learned_blends]
+enabled = true
+include_persistence_to_raw = true
+include_persistence_to_residual = true
+include_raw_to_residual = true
+include_hybrid_phase_gate = true
+persistence_weight_start = 0.90
+persistence_weight_end = 0.20
+raw_weight_start = 0.90
+raw_weight_end = 0.20
+hybrid_phase_gate_aligned_weight = 0.15
+hybrid_phase_gate_non_aligned_weight = 0.75
+refinement_enabled = true
+refinement_step = 0.05
+refinement_neighbors = 1
+max_weights_per_family = 6
+curve = "linear"
+
+[multires.rollout_learned_blends.hybrid_phase_gate_bucket_weights]
+"0" = 0.15
+"300" = 0.90
+"600" = 0.60
+
+[multires.rollout_policy_candidates]
+enabled = true
+max_horizon_minutes = 15
+selection_targets = ["endpoint_mae", "path_mae", "phase_mean_mae", "next_lock_mae"]
+
+[multires.rollout_sweep_policies]
+enabled = true
+min_horizon_minutes = 30
+max_horizon_minutes = 120
+origin_policies = ["phase_balanced"]
+selection_targets = ["next_lock_mae", "path_mae", "profile_shape_mae"]
+min_source_candidates = 2
+max_source_candidates = 3
+
+[multires.horizon_curve]
+enabled = true
+horizons_minutes = [1, 15, 30, 60, 120, 240, 360, 720, 1440]
+origins_per_run = 8
+origin_policy = "auto"
+selection_target = "auto"
+max_candidates = 8
+include_stage5_anchor = true
+reuse_existing_sweeps = true
+write_latest = true
+
+[multires.forecast_control]
+enabled = true
+day_ahead_horizon_minutes = 1440
+hourly_horizon_minutes = 60
+phase_horizon_minutes = 15
+nowcast_horizon_minutes = 1
+day_ahead_refresh_enabled = true
+day_ahead_refresh_interval_minutes = 60
+day_ahead_refresh_candidate_label = "auto"
+day_ahead_refresh_lookback_minutes = 120
+day_ahead_refresh_residual_drift_mae_pct_threshold = 12.0
+day_ahead_refresh_transition_mae_pct_threshold = 10.0
+day_ahead_refresh_activity_ratio_shift_threshold = 0.18
+day_ahead_refresh_threshold_quantiles = [0.50, 0.80, 0.95]
+day_ahead_refresh_min_trigger_rate = 0.10
+day_ahead_refresh_max_trigger_rate = 0.75
+day_ahead_refresh_min_profile_gain_fraction_vs_unconditional = 0.60
+day_ahead_refresh_min_lock_gain_fraction_vs_unconditional = 0.50
+day_ahead_refresh_trigger_mode = "any"
+day_ahead_refresh_candidate_trigger_modes = [
+  "any",
+  "residual_or_activity",
+  "residual_or_activity_active_band",
+  "residual_or_activity_active_or_transition",
+  "residual_or_transition",
+  "activity_or_transition",
+  "residual_only",
+  "activity_only",
+  "activity_active_band",
+  "transition_only",
+  "residual_and_activity",
+  "residual_and_transition",
+  "activity_and_transition",
+  "two_of_three",
+]
+actual_resolution = "1min"
+lock_interval_minutes = 15
+cycle_origin_hour = 0
+cycle_origin_minute = 0
+cycle_origin_stride_minutes = 360
+rolling_benchmark_enabled = true
+rolling_benchmark_origin_stride_minutes = 180
+rolling_benchmark_max_cycles = 0
+rolling_benchmark_bootstrap_samples = 400
+rolling_benchmark_confidence_level = 0.95
+calibration_splits = ["validate"]
+evaluation_splits = ["test"]
+max_cycles = 0
+optimize_replayed_candidates = true
+control_promotion_scope = "held_out_evaluation"
+control_promotion_guard_enabled = true
+control_promotion_guard_max_next_lock_regress_pct = 0.0
+control_promotion_guard_max_peak_value_regress_pct = 0.0
+control_promotion_guard_max_peak_miss_regress = 0.0
+allow_baseline_candidates = true
+candidate_pool_size = 2
+candidate_benchmark_origin_cap = 8
+phase_candidate_benchmark_origin_cap = 96
+phase_candidate_evaluation_origin_cap = 96
+phase_control_candidate_pool_size = 4
+phase_control_prior_run_limit = 6
+phase_control_min_prior_support_runs = 2
+phase_control_max_supplemental_contexts_per_resolution = 1
+phase_control_exploration_slots = 1
+phase_control_origin_cap = 96
+phase_stack_native_learned_top_candidates_per_pool = 4
+phase_stack_native_baseline_top_candidates_per_pool = 1
+phase_stack_blend_weights = [0.15, 0.25, 0.35, 0.50, 0.65, 0.80]
+phase_stack_blend_parent_top_candidates = 12
+phase_stack_bucket_policy_enabled = true
+phase_stack_bucket_granularity_minutes = 15
+phase_stack_baseline_control_blend_enabled = true
+phase_stack_baseline_control_top_candidates = 4
+phase_stack_baseline_control_blend_weights = [0.10, 0.15, 0.20, 0.25, 0.35, 0.50, 0.65, 0.80]
+phase_stack_baseline_control_bucket_blend_enabled = true
+phase_stack_baseline_control_bucket_size_minutes = 5
+phase_stack_guard_enabled = true
+phase_stack_guard_min_lock_gain_pct = 0.005
+phase_stack_guard_require_rolling_support = true
+phase_stack_guard_rolling_scope = "rolling_evaluation"
+phase_stack_guard_min_rolling_lock_gain_pct = 0.001
+phase_stack_guard_max_rolling_next_lock_regress_pct = 0.0
+phase_stack_guard_max_rolling_profile_degrade_pct = 0.0
+phase_stack_guard_max_rolling_peak_value_regress_pct = 0.0
+phase_stack_guard_min_rolling_peak_hit_gain = 0.0
+phase_stack_guard_max_rolling_optimizer_regress_pct = 0.0
+phase_stack_guard_max_next_lock_regress_pct = 0.0
+phase_stack_guard_max_profile_degrade_pct = 0.002
+phase_stack_guard_max_peak_value_regress_pct = 0.0
+phase_stack_guard_min_peak_hit_gain = 0.01
+phase_stack_guard_max_optimizer_regress_pct = 0.05
+benchmark_expanded_candidate_pool_size = 6
+benchmark_expanded_pool_layers = ["hourly", "phase"]
+benchmark_full_origin_layers = ["hourly"]
+nowcast_candidate_pool_size = 6
+nowcast_control_blend_enabled = true
+nowcast_control_blend_weights = [0.0, 0.02, 0.04, 0.06, 0.08, 0.10, 0.12, 0.15, 0.20, 0.30, 0.40, 0.60, 0.80, 1.0]
+nowcast_control_bucket_blend_enabled = true
+nowcast_control_bucket_size_minutes = 5
+nowcast_control_bucket_blend_weights = [0.0, 0.01, 0.015, 0.02, 0.03, 0.04, 0.05]
+nowcast_advisory_evidence_enabled = true
+nowcast_advisory_tie_tolerance = 0.002
+nowcast_dynamic_overlay_enabled = true
+nowcast_dynamic_overlay_enforce = false
+nowcast_dynamic_overlay_profile_active_threshold = 0.50
+nowcast_dynamic_overlay_high_ramp_fraction_threshold = 0.15
+nowcast_dynamic_overlay_allow_next_lock = true
+nowcast_dynamic_overlay_allow_predicted_peak = true
+nowcast_soft_overlay_shadow_enabled = true
+nowcast_soft_overlay_supported_weights = [0.80, 0.90, 0.95, 1.0]
+nowcast_soft_overlay_background_weights = [0.0, 0.10, 0.20, 0.35, 0.50, 0.65, 0.80, 1.0]
+nowcast_soft_overlay_max_next_lock_regress_pct = 0.0
+nowcast_soft_overlay_max_peak_hit_regress = 0.0
+day_ahead_selection_metric = "profile_shape_mae"
+hourly_selection_metric = "optimizer_score"
+phase_selection_metric = "optimizer_score"
+phase_stack_selection_metric = "optimizer_score"
+nowcast_selection_metric = "optimizer_score"
+optimizer_selection_next_lock_weight = 0.40
+optimizer_selection_lock_weight = 0.15
+optimizer_selection_peak_value_weight = 0.20
+optimizer_selection_peak_miss_weight = 0.25
+optimizer_delivery_min_lead_specific_samples = 8
+optimizer_delivery_next_lock_min_samples = 8
+optimizer_delivery_next_lock_scaled_enabled = true
+optimizer_delivery_next_lock_scale_floor_quantile = 0.25
+optimizer_delivery_next_lock_scale_floor_min_load = 250.0
+optimizer_delivery_predicted_peak_min_samples = 6
+optimizer_delivery_predicted_peak_lead_min_samples = 4
+optimizer_delivery_confidence_full_support_n = 8
+optimizer_delivery_confidence_band_width_scale_pct = 100.0
+optimizer_delivery_nowcast_cadence_minutes = 1
+optimizer_delivery_phase_cadence_minutes = 15
+optimizer_delivery_hourly_cadence_minutes = 60
+optimizer_delivery_day_ahead_cadence_minutes = 1440
+optimizer_delivery_nowcast_stale_threshold_minutes = 5
+optimizer_delivery_phase_stale_threshold_minutes = 30
+optimizer_delivery_hourly_stale_threshold_minutes = 90
+optimizer_delivery_day_ahead_stale_threshold_minutes = 1560
+replay_cache_enabled = true
+replay_cache_dirname = "replay_cache"
+write_latest = true
+
+[multires.forecast_control.optimizer_delivery_confidence_layer_multipliers]
+nowcast = 1.0
+phase = 0.9
+hourly = 0.8
+day_ahead = 0.7
+
+[multires.forecast_control.optimizer_delivery_confidence_quantile_source_multipliers]
+lead_interval = 1.0
+next_lock_scaled_global = 0.97
+predicted_peak_lead_interval = 0.98
+predicted_peak_global = 0.95
+next_lock_global = 0.92
+layer_global_fallback = 0.85
+layer_global = 0.85
+unavailable = 0.35

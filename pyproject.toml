@@ -9,6 +9,7 @@ version = "0.1.0"
 description = "Short-term electric load forecasting pipeline and modeling framework"
 requires-python = ">=3.11"
 dependencies = [
+    "joblib>=1.3,<2.0",
     "numpy>=1.24,<3.0",
     "pandas>=2.0,<3.0",
     "scipy>=1.11,<2.0",
@@ -19,9 +20,14 @@ dependencies = [
     "fastparquet>=2025.12,<2026.0",
     "scikit-learn>=1.3,<2.0",
     "statsmodels>=0.14,<1.0",
+    "threadpoolctl>=3.2,<4.0",
 ]
 
 [project.optional-dependencies]
+acceleration = [
+    "xgboost>=2.1,<4.0; (platform_system == 'Windows' and platform_machine == 'AMD64') or (platform_system == 'Linux' and platform_machine == 'x86_64')",
+]
+shap = ["shap>=0.43,<1.0"]
 dev = [
     "ipykernel>=6.0,<7.0",
     "jupyter>=1.0,<2.0",

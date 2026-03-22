@@ -38,6 +38,7 @@ def test_validate_notebooks_success(monkeypatch, tmp_path):
     notebook.write_text("{}", encoding="utf-8")
 
     calls: list[Path] = []
+    monkeypatch.setattr(module, "NOTEBOOK_RUNS_DIR", tmp_path / "archives")
     monkeypatch.setattr(module, "execute_notebook", lambda path: calls.append(path))
     monkeypatch.setattr(module, "_clear_notebook_outputs", lambda path: None)
     module.validate_notebooks([notebook])
@@ -80,7 +81,7 @@ def test_validate_notebooks_notebook_argument(monkeypatch, tmp_path):
     assert captured == [([notebook.resolve()], True)]
 
 
-def test_validate_notebooks_silver_matrix_profiles(monkeypatch):
+def test_validate_notebooks_silver_matrix_profiles(monkeypatch, tmp_path):
     """Ensure silver notebook validation runs the configured resolution/profile matrix."""
     module = _load_validate_notebooks_module()
     silver = Path("notebooks/002_silver_eda.ipynb")
@@ -90,6 +91,7 @@ def test_validate_notebooks_silver_matrix_profiles(monkeypatch):
     def _capture(path: Path, env_overrides: dict[str, str] | None = None):
         calls.append((path, env_overrides))
 
+    monkeypatch.setattr(module, "NOTEBOOK_RUNS_DIR", tmp_path / "archives")
     monkeypatch.setattr(module, "execute_notebook", _capture)
     monkeypatch.setattr(module, "_clear_notebook_outputs", lambda path: None)
     module.validate_notebooks([silver])
@@ -98,6 +100,63 @@ def test_validate_notebooks_silver_matrix_profiles(monkeypatch):
     assert len(calls) == 1 + len(module.SILVER_VALIDATION_PROFILES)
     for idx, profile in enumerate(module.SILVER_VALIDATION_PROFILES, start=1):
         assert calls[idx] == (silver, profile)
+
+
+def test_validate_notebooks_refreshes_modeling_inputs_before_modeling(monkeypatch, tmp_path):
+    """Ensure modeling notebook validation refreshes silver, gold, and model inputs first."""
+    module = _load_validate_notebooks_module()
+    modeling = Path("notebooks/003_modeling.ipynb")
+
+    calls: list[tuple[str, Path | None]] = []
+    monkeypatch.setattr(module, "NOTEBOOK_RUNS_DIR", tmp_path / "archives")
+    monkeypatch.setattr(
+        module,
+        "_refresh_modeling_inputs",
+        lambda: calls.append(("modeling_inputs", None)),
+    )
+    monkeypatch.setattr(
+        module,
+        "execute_notebook",
+        lambda path, env_overrides=None: calls.append(("notebook", path)),
+    )
+    monkeypatch.setattr(
+        module,
+        "_validate_modeling_outputs",
+        lambda: {"output_dir": "outputs/004_modeling/test", "csv_artifacts": {}, "png_artifacts": {}},
+    )
+    monkeypatch.setattr(module, "_clear_notebook_outputs", lambda path: None)
+
+    module.validate_notebooks([modeling])
+
+    assert calls == [("modeling_inputs", None), ("notebook", modeling)]
+
+
+def test_validate_notebooks_records_modeling_artifact_validation(monkeypatch, tmp_path):
+    """Ensure modeling notebook manifest entries capture artifact validation details."""
+    module = _load_validate_notebooks_module()
+    modeling = Path("notebooks/003_modeling.ipynb")
+
+    monkeypatch.setattr(module, "NOTEBOOK_RUNS_DIR", tmp_path / "archives")
+    monkeypatch.setattr(module, "_refresh_modeling_inputs", lambda: None)
+    monkeypatch.setattr(module, "execute_notebook", lambda path, env_overrides=None: None)
+    monkeypatch.setattr(
+        module,
+        "_validate_modeling_outputs",
+        lambda: {
+            "output_dir": "outputs/004_modeling/commercial_facility",
+            "csv_artifacts": {"metrics_overall.csv": {"rows": 33, "required_columns_present": True}},
+            "png_artifacts": {"fig_actual_vs_predicted.png": {"width": 1200, "height": 600}},
+        },
+    )
+    monkeypatch.setattr(module, "_clear_notebook_outputs", lambda path: None)
+
+    module.validate_notebooks([modeling])
+
+    manifest_path = next((tmp_path / "archives").glob("*/run_manifest.json"))
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    entry = manifest["notebooks"][0]
+    assert entry["artifact_validation"]["output_dir"].endswith("commercial_facility")
+    assert "metrics_overall.csv" in entry["artifact_validation"]["csv_artifacts"]
 
 
 def test_validate_notebooks_default_scope_stops_at_modeling_notebook():
@@ -161,3 +220,51 @@ def test_clear_notebook_outputs_removes_only_outputs(tmp_path):
     cell = cleaned["cells"][0]
     assert cell["outputs"] == []
     assert cell["execution_count"] == 7
+
+
+def test_validate_notebooks_archives_executed_snapshot_before_clearing(monkeypatch, tmp_path):
+    """Ensure notebook validation preserves an executed snapshot in timestamped outputs."""
+    module = _load_validate_notebooks_module()
+    notebook = tmp_path / "demo.ipynb"
+    payload = {
+        "cells": [
+            {
+                "id": "demo-cell",
+                "cell_type": "code",
+                "execution_count": 7,
+                "metadata": {},
+                "outputs": [{"output_type": "stream", "name": "stdout", "text": "hello"}],
+                "source": ["print('hello')"],
+            }
+        ],
+        "metadata": {},
+        "nbformat": 4,
+        "nbformat_minor": 5,
+    }
+    notebook.write_text(json.dumps(payload), encoding="utf-8")
+
+    monkeypatch.setattr(module, "NOTEBOOK_RUNS_DIR", tmp_path / "archives")
+    monkeypatch.setattr(module, "execute_notebook", lambda path, env_overrides=None: None)
+
+    module.validate_notebooks([notebook])
+
+    archive_root = tmp_path / "archives"
+    manifest_paths = sorted(archive_root.glob("*/run_manifest.json"))
+    assert manifest_paths
+    manifest_path = manifest_paths[0]
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    assert manifest["status"] == "success"
+    assert manifest["stage"] == "008_notebook_runs"
+    assert len(manifest["notebooks"]) == 1
+
+    entry = manifest["notebooks"][0]
+    archived = manifest_path.parent / entry["archive_path"]
+    assert archived.exists()
+    assert entry["source_path"].endswith("demo.ipynb")
+    archived_payload = json.loads(archived.read_text(encoding="utf-8"))
+    assert archived_payload["cells"][0]["outputs"]
+    assert entry["output_count"] == 1
+    assert (archive_root / "latest" / "run_manifest.json").exists()
+
+    cleaned = json.loads(notebook.read_text(encoding="utf-8"))
+    assert cleaned["cells"][0]["outputs"] == []

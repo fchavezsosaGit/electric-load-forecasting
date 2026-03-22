@@ -1,5 +1,12 @@
 # MVMP (Minimum Viable Modeling Product)
 
+> Historical note:
+> This document preserves the notebook-era `1min` MVP anchor. It is still useful
+> for understanding how the repo started, but it is not the active operating
+> roadmap. The active direction now lives in
+> [002_operating_direction_spec.md](../000_governance/002_operating_direction_spec.md)
+> and [operational_hypotheses.md](operational_hypotheses.md).
+
 This document defines the first constrained modeling target for the electric load
 forecasting project. The MVMP is intentionally narrow: it verifies that the full
 pipeline (data ingestion through evaluation) works end-to-end before the team invests
@@ -7,6 +14,7 @@ in more complex models or feature engineering.
 
 Related references:
 - [000_spec.md](../000_governance/000_spec.md)
+- [002_operating_direction_spec.md](../000_governance/002_operating_direction_spec.md)
 - [feature_sets.md](feature_sets.md)
 - [hypothesis.md](hypothesis.md)
 - [glossary.md](../004_reference/glossary.md)
@@ -26,10 +34,16 @@ Related references:
 - The current Report IV decision is to lock MVP execution to `1min` so hypothesis
   evidence is based on one consistent resolution.
 - `minimal` is still the anchor for controlled comparisons, but the executed notebook
-  evaluates all four feature sets (`minimal`, `temporal`, `curated`, `full`).
+  evaluates all five canonical feature sets (`minimal`, `temporal`, `curated`, `full`,
+  `full_stable`).
+- The active `temporal`, `curated`, `full`, and `full_stable` sets now include
+  continuous daily/weekly Fourier encodings so cyclical structure is represented
+  smoothly for nonlinear models.
 - Ridge provides a deterministic regularized linear baseline; HGB adds nonlinear
   behavior checks without changing data contracts.
-- Multi-resolution expansion (`5min`, `10min`) remains planned future work.
+- Multi-resolution and recursive-rollout support now exist as Stage-6 and Stage-7
+  scripted workflows, but they remain outside the canonical MVP notebook so Report-IV
+  claims stay anchored to the `1min` scope.
 
 ## Dataset sizes (approximate, `1min`)
 
@@ -54,7 +68,8 @@ The MVMP is successful when all conditions below are met:
    is executed once after model selection.
 3. **Baseline transparency**: Performance versus persistence/previous-day/avg-workday is
    explicitly reported, regardless of whether a model beats persistence.
-4. **Artifact completeness**: `outputs/004_modeling/` contains required CSV/PNG files.
+4. **Artifact completeness**: `outputs/004_modeling/<artifact_namespace>/` contains
+   required CSV/PNG files, including normalized `mae_pct` / `rmse_pct` fields.
 
 ## Persistence baseline definition
 
@@ -74,17 +89,21 @@ signal from the feature set.
 |-----------|------------|----------------------|--------------|----------------|
 | H1 (workday signal) | `1min` | minimal vs temporal-minus-workday control | Ridge (primary), HGB (cross-check) | MAE |
 | H2 (lag/transition value) | `1min` | temporal vs curated | Ridge and HGB | RMSE |
-| H3 (resolution tradeoff) | `1min` vs `5min` | minimal | Ridge/HGB parity design | MAE |
+| H3 (resolution tradeoff) | multi-resolution | matched-horizon Stage-6 grid | Ridge/HGB + persistence | MAE |
 | H4 (exploratory nonlinear behavior) | `1min` | all feature sets | Ridge vs HGB | MAE and RMSE |
+| H5 (horizon degradation) | multi-horizon | selected model at increasing lead times | Selected model + persistence | MAE ratio |
 
 See [hypothesis.md](hypothesis.md) for full hypothesis definitions and experimental
 designs.
 
 ## What comes after MVMP
 
-Once the MVMP criteria are met, the team can proceed to:
-- Re-enable multi-resolution runs to evaluate H3 directly.
-- Add recursive rollout evaluation for day-ahead pathways.
-- Expand beyond fixed model grids into tuned model selection.
-- Add additional data windows and operational stress slices.
+Once the MVMP criteria are met, the notebook-era scope is considered complete.
+Further work should be driven by the active layered operating spec instead of by
+re-expanding this MVP:
 
+- keep MVMP as provenance for the original `1min` notebook question
+- use Stage-5 through Stage-10 and the active operating spec for current model
+  and delivery decisions
+- do not use this document alone to justify new `1m`-first claims or a
+  single-model roadmap

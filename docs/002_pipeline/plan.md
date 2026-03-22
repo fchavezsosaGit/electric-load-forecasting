@@ -2,9 +2,18 @@
 Plan: Data Pipeline And Model Readiness
 ================================================================================
 
+> Historical note:
+> This document is retained as the foundation build plan for the medallion and
+> model-dataset pipeline. It is not the active optimizer-facing modeling
+> roadmap. For the current direction, use
+> [002_operating_direction_spec.md](../000_governance/002_operating_direction_spec.md),
+> [operational_hypotheses.md](../003_modeling/operational_hypotheses.md), and
+> [current_operating_approach.md](../003_modeling/current_operating_approach.md).
+
 Canonical specifications:
 - [000_spec.md](../000_governance/000_spec.md)
 - [001_spec.md](../000_governance/001_spec.md)
+- [002_operating_direction_spec.md](../000_governance/002_operating_direction_spec.md)
 
 Glossary:
 - [glossary.md](../004_reference/glossary.md)
@@ -68,7 +77,7 @@ Silver outputs use suffixes:
 - power_load_15m.parquet
 
 Silver schema:
-- 44 columns (core + temporal + workday + lag + rolling + delta + slope)
+- 82 columns (core + temporal + Fourier + workday + lag + rolling + delta + slope + time-normalized windows + baseline/regime context)
 
 ================================================================================
 Step 4: Silver -> Gold

@@ -26,16 +26,18 @@ ABSOLUTE_PATH_PATTERNS = (
 
 
 def _iter_scan_files() -> list[Path]:
+    """Return tracked source files that should be scanned for absolute-path leaks."""
     files: list[Path] = []
     for pattern in SCAN_GLOBS:
         for candidate in PROJECT_ROOT.rglob(pattern):
-            if any(part in SKIP_DIR_NAMES for part in candidate.parts):
+            if any(part in SKIP_DIR_NAMES or part.startswith(".venv") for part in candidate.parts):
                 continue
             files.append(candidate)
     return files
 
 
 def _extract_notebook_source(path: Path) -> str:
+    """Extract executable notebook source so only committed code is scanned."""
     notebook = json.loads(path.read_text(encoding="utf-8"))
     fragments: list[str] = []
     for cell in notebook.get("cells", []):
@@ -45,6 +47,7 @@ def _extract_notebook_source(path: Path) -> str:
 
 
 def _find_matches(text: str) -> list[str]:
+    """Return all machine-specific absolute path matches found in one text blob."""
     matches: list[str] = []
     for pattern in ABSOLUTE_PATH_PATTERNS:
         matches.extend(pattern.findall(text))
@@ -52,6 +55,7 @@ def _find_matches(text: str) -> list[str]:
 
 
 def test_source_files_do_not_contain_machine_specific_absolute_paths():
+    """Ensure tracked sources do not hardcode developer-specific absolute paths."""
     violations: list[str] = []
     for path in _iter_scan_files():
         if path.suffix == ".ipynb":

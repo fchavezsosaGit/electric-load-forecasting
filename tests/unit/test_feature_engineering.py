@@ -8,6 +8,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
+from modeling.feature_engineering import add_time_normalized_features
 from scripts.config import DAY_CLASS_MAP, EDA_CONFIG
 from scripts.utils import (
     adaptive_outlier_threshold,
@@ -98,6 +99,30 @@ def test_rolling_slope_series_window_two():
     assert np.isnan(result.iloc[0])
     assert result.iloc[1] == pytest.approx(2.0)
     assert result.iloc[2] == pytest.approx(2.0)
+
+
+def test_time_normalized_features_define_collapsed_single_step_windows():
+    """Single-step clock windows should stay causal instead of producing all-null coarse features."""
+    index = pd.date_range("2025-01-01 00:00:00", periods=4, freq="15min")
+    frame = pd.DataFrame({"avg_load": [10.0, 20.0, 30.0, 40.0]}, index=index)
+
+    engineered = add_time_normalized_features(frame, resolution="15min")
+
+    assert np.isnan(engineered.loc[index[0], "rolling_std_min_15"])
+    assert np.isnan(engineered.loc[index[0], "slope_min_15"])
+    assert engineered.loc[index[1]:, "rolling_std_min_15"].eq(0.0).all()
+    assert engineered.loc[index[1]:, "slope_min_15"].eq(0.0).all()
+    assert engineered["rolling_std_min_15"].notna().sum() == len(index) - 1
+    assert engineered["slope_min_15"].notna().sum() == len(index) - 1
+
+
+def test_rolling_slope_series_large_window_remains_linear():
+    """Ensure very large windows stay numerically correct without huge allocations."""
+    series = pd.Series(np.arange(20_000, dtype=float))
+    result = rolling_slope_series(series, window=14_400)
+    assert result.iloc[:14_399].isna().all()
+    assert result.iloc[-1] == pytest.approx(1.0, abs=1e-12)
+    assert result.iloc[-10:].notna().all()
 
 
 def test_month_to_season_invalid_input_raises():

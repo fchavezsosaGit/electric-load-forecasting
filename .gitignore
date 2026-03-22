@@ -1,6 +1,6 @@
 # Repository ignore policy.
 # Purpose: keep generated artifacts, local environments, and editor metadata out of VCS.
-# Last reviewed: 2026-03-06
+# Last reviewed: 2026-03-22
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
@@ -25,6 +25,15 @@ data/003_gold/
 data/004_model/
 outputs/004_modeling/
 outputs/005_performance/
+outputs/006_multires/
+outputs/007_rollout/
+outputs/008_notebook_runs/
+outputs/009_horizon_curve/
+outputs/010_forecast_control/
+outputs/*.csv
+outputs/analysis_*.csv
+outputs/006_multires_analysis_*/
+outputs/reports/
 # legacy generated output folders retained during artifact-path migration
 outputs/step4_artifacts/
 outputs/step5_artifacts/

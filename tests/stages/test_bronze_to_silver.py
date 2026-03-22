@@ -79,6 +79,45 @@ def test_bronze_to_silver_lag_and_rolling_warmup(silver_module, synthetic_bronze
     # delta_5 should be lag_5 - lag_1 whenever both are present.
     valid = silver_1m[["delta_5", "lag_5", "lag_1"]].dropna().iloc[0]
     assert valid["delta_5"] == valid["lag_5"] - valid["lag_1"]
+    assert {"lag_min_15", "rolling_mean_min_60", "avg_workday_baseline", "profile_activity_ratio"}.issubset(
+        set(silver_1m.columns)
+    )
+
+
+def test_bronze_to_silver_builds_regime_features(silver_module, synthetic_bronze_df, tmp_path):
+    """Ensure derived workday-profile regime features are populated causally."""
+    bronze_path = tmp_path / "bronze.parquet"
+    silver_dir = tmp_path / "silver"
+    synthetic_bronze_df.to_parquet(bronze_path, index=False)
+
+    silver_module.bronze_to_silver(
+        bronze_path=bronze_path,
+        silver_dir=silver_dir,
+        resolutions=["1min"],
+    )
+    silver_1m = pd.read_parquet(silver_dir / "power_load_1m.parquet")
+
+    assert silver_1m["prev_day_workday"].notna().all()
+    assert silver_1m["next_day_workday"].notna().all()
+    assert set(silver_1m["workday_transition"].dropna().unique()).issubset({0.0, 1.0})
+    assert silver_1m["previous_day_load"].notna().any()
+    assert silver_1m["avg_workday_baseline"].notna().any()
+    assert silver_1m["anchored_workday_baseline"].notna().any()
+    assert set(
+        [
+            "phase_minute_15m",
+            "phase_progress_15m",
+            "phase_boundary_dist_15m",
+            "phase_boundary_flag_15m",
+            "phase_sin_15m",
+            "phase_cos_15m",
+        ]
+    ).issubset(silver_1m.columns)
+    midnight = silver_1m.loc[silver_1m["timestamp"].eq(pd.Timestamp("2025-01-01 00:00:00"))].iloc[0]
+    assert int(midnight["phase_minute_15m"]) == 0
+    assert float(midnight["phase_progress_15m"]) == pytest.approx(0.0)
+    assert float(midnight["phase_boundary_dist_15m"]) == pytest.approx(0.0)
+    assert int(midnight["phase_boundary_flag_15m"]) == 1
 
 
 def test_bronze_to_silver_supports_seconds_and_15min_and_alias(
@@ -178,6 +217,49 @@ def test_bronze_to_silver_required_non_lag_columns_have_no_nulls(
     silver_df = pd.read_parquet(silver_dir / "power_load_1m.parquet")
     required = SCHEMAS["silver"]["required_not_null"]
     assert int(silver_df[required].isna().sum().sum()) == 0
+
+
+def test_bronze_to_silver_fourier_features_are_continuous_and_valid(
+    silver_module, synthetic_bronze_df, tmp_path
+):
+    """Ensure Fourier features are non-null, continuous, and lie on the unit circle."""
+    bronze_path = tmp_path / "bronze.parquet"
+    silver_dir = tmp_path / "silver"
+    synthetic_bronze_df.to_parquet(bronze_path, index=False)
+
+    silver_module.bronze_to_silver(
+        bronze_path=bronze_path,
+        silver_dir=silver_dir,
+        resolutions=["1s"],
+    )
+    silver_df = pd.read_parquet(silver_dir / "power_load_1s.parquet")
+
+    for column_name in ("hour_sin", "hour_cos", "dow_sin", "dow_cos"):
+        assert int(silver_df[column_name].isna().sum()) == 0
+
+    midnight = silver_df.loc[silver_df["timestamp"] == pd.Timestamp("2025-01-01 00:00:00")].iloc[0]
+    assert abs(float(midnight["hour_sin"])) < 1e-12
+    assert abs(float(midnight["hour_cos"]) - 1.0) < 1e-12
+
+    quarter_day = silver_df.loc[
+        silver_df["timestamp"] == pd.Timestamp("2025-01-01 06:00:00")
+    ].iloc[0]
+    assert abs(float(quarter_day["hour_sin"]) - 1.0) < 1e-12
+    assert abs(float(quarter_day["hour_cos"])) < 1e-9
+
+    within_hour_a = silver_df.loc[
+        silver_df["timestamp"] == pd.Timestamp("2025-01-01 00:00:00")
+    ].iloc[0]
+    within_hour_b = silver_df.loc[
+        silver_df["timestamp"] == pd.Timestamp("2025-01-01 00:00:30")
+    ].iloc[0]
+    assert float(within_hour_b["hour_sin"]) > float(within_hour_a["hour_sin"])
+    assert float(within_hour_b["hour_cos"]) < float(within_hour_a["hour_cos"])
+
+    hour_identity = silver_df["hour_sin"] ** 2 + silver_df["hour_cos"] ** 2
+    dow_identity = silver_df["dow_sin"] ** 2 + silver_df["dow_cos"] ** 2
+    assert ((hour_identity - 1.0).abs() < 1e-10).all()
+    assert ((dow_identity - 1.0).abs() < 1e-10).all()
 
 
 def test_bronze_to_silver_logs_quality_gate(
